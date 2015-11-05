@@ -1,0 +1,26 @@
+{
+  "name": "ngraph.kruskal",
+  "version": "1.0.0",
+  "description": "A minimum-spanning-tree algorithm for ngraph.graph",
+  "main": "index.js",
+  "scripts": {
+    "test": "tap test/*.js"
+  },
+  "keywords": [
+    "ngraph",
+    "spanning",
+    "tree",
+    "minimum",
+    "kruskal"
+  ],
+  "author": "Andrei Kashcha",
+  "license": "MIT",
+  "dependencies": {
+    "ngraph.disjoint-set": "^1.0.0"
+  },
+  "devDependencies": {
+    "ngraph.fromdot": "^0.1.6",
+    "ngraph.graph": "0.0.12",
+    "tap": "^2.2.0"
+  }
+}
