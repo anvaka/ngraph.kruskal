@@ -21,6 +21,7 @@
   "devDependencies": {
     "ngraph.fromdot": "^0.1.6",
     "ngraph.graph": "0.0.12",
-    "tap": "^2.2.0"
+    "tap": "^2.2.0",
+    "vivagraphjs": "^0.8.1"
   }
 }
