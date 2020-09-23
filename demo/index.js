@@ -4,9 +4,9 @@ var graph = require('./createGraph.js');
 
 var kruskal = require('../index.js');
 var path = kruskal(graph);
-// The rest is just trendering.
+// The rest is just rendering.
 var pathGraph = Viva.Graph.graph();
-path.forEach(addToPathgraph);
+path.forEach(addToPathGraph);
 renderGraph(graph, 'left');
 renderGraph(pathGraph, 'right');
 
@@ -54,6 +54,6 @@ function renderGraph(graph, container) {
   renderer.run();
 }
 
-function addToPathgraph(el) {
+function addToPathGraph(el) {
   pathGraph.addLink(el.fromId, el.toId);
 }
