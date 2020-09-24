@@ -21,16 +21,16 @@ function d3Sample(){
 };
 
 
-},{"vivagraphjs":68}],2:[function(require,module,exports){
+},{"vivagraphjs":75}],2:[function(require,module,exports){
 var Viva = require('vivagraphjs');
 
 var graph = require('./createGraph.js');
 
 var kruskal = require('../index.js');
 var path = kruskal(graph);
-// The rest is just trendering.
+// The rest is just rendering.
 var pathGraph = Viva.Graph.graph();
-path.forEach(addToPathgraph);
+path.forEach(addToPathGraph);
 renderGraph(graph, 'left');
 renderGraph(pathGraph, 'right');
 
@@ -78,11 +78,11 @@ function renderGraph(graph, container) {
   renderer.run();
 }
 
-function addToPathgraph(el) {
+function addToPathGraph(el) {
   pathGraph.addLink(el.fromId, el.toId);
 }
 
-},{"../index.js":3,"./createGraph.js":1,"vivagraphjs":68}],3:[function(require,module,exports){
+},{"../index.js":3,"./createGraph.js":1,"vivagraphjs":75}],3:[function(require,module,exports){
 var DisjointSet = require('ngraph.disjoint-set');
 module.exports = kruskal;
 
@@ -133,7 +133,7 @@ function TreeNode(fromId, toId) {
   this.toId = toId;
 }
 
-},{"ngraph.disjoint-set":9}],4:[function(require,module,exports){
+},{"ngraph.disjoint-set":11}],4:[function(require,module,exports){
 addEventListener.removeEventListener = removeEventListener
 addEventListener.addEventListener = addEventListener
 
@@ -285,8 +285,10 @@ function intersect(
 },{}],6:[function(require,module,exports){
 module.exports.degree = require('./src/degree.js');
 module.exports.betweenness = require('./src/betweenness.js');
+module.exports.closeness = require('./src/closeness.js');
+module.exports.eccentricity = require('./src/eccentricity.js');
 
-},{"./src/betweenness.js":7,"./src/degree.js":8}],7:[function(require,module,exports){
+},{"./src/betweenness.js":7,"./src/closeness.js":8,"./src/degree.js":9,"./src/eccentricity.js":10}],7:[function(require,module,exports){
 module.exports = betweennes;
 
 /**
@@ -361,7 +363,6 @@ function betweennes(graph, oriented) {
 
     while (Q.length) {
       var v = Q.shift();
-      var dedup = Object.create(null);
       S.push(v);
       graph.forEachLinkedNode(v, toId, oriented);
     }
@@ -399,6 +400,78 @@ function betweennes(graph, oriented) {
 }
 
 },{}],8:[function(require,module,exports){
+module.exports = closeness;
+
+/**
+ * In a connected graph, the normalized closeness centrality of a node is the average
+ * length of the shortest path between the node and all other nodes in the
+ * graph. Thus the more central a node is, the closer it is to all other nodes.
+ */
+function closeness(graph, oriented) {
+  var Q = [];
+  // list of predcessors on shortest paths from source
+  // distance from source
+  var dist = Object.create(null);
+
+  var currentNode;
+  var centrality = Object.create(null);
+
+  graph.forEachNode(setCentralityToZero);
+  graph.forEachNode(calculateCentrality);
+
+  return centrality;
+
+  function setCentralityToZero(node) {
+    centrality[node.id] = 0;
+  }
+
+  function calculateCentrality(node) {
+    currentNode = node.id;
+    singleSourceShortestPath(currentNode);
+    accumulate();
+  }
+
+  function accumulate() {
+    // Add all distances for node to array, excluding -1s
+    var distances = Object.keys(dist).map(function(key) {return dist[key]}).filter(function(val){return val !== -1});
+    // Set number of reachable nodes
+    var reachableNodesTotal = distances.length;
+    // Compute sum of all distances for node
+    var totalDistance = distances.reduce(function(a,b) { return a + b });
+    if (totalDistance > 0) {
+      centrality[currentNode] = ((reachableNodesTotal - 1) / totalDistance); 
+    } else {
+      centrality[currentNode] = 0;
+    }
+  }
+
+  function singleSourceShortestPath(source) {
+    graph.forEachNode(initNode);
+    dist[source] = 0;
+    Q.push(source);
+
+    while (Q.length) {
+      var v = Q.shift();
+      graph.forEachLinkedNode(v, processNode, oriented);
+    }
+
+    function initNode(node) {
+      var nodeId = node.id;
+      dist[nodeId] = -1;
+    }
+
+    function processNode(otherNode) {
+      var w = otherNode.id
+      if (dist[w] === -1) {
+        // Node w is found for the first time
+        dist[w] = dist[v] + 1;
+        Q.push(w);
+      }
+    }
+  }
+}
+
+},{}],9:[function(require,module,exports){
 module.exports = degree;
 
 /**
@@ -413,10 +486,8 @@ module.exports = degree;
  *   'inout' - (default) generic degree centrality is calculated
  */
 function degree(graph, kind) {
-  var getNodeDegree,
-    sortedDegrees = [],
-    result = Object.create(null),
-    nodeDegree;
+  var getNodeDegree;
+  var result = Object.create(null);
 
   kind = (kind || 'both').toLowerCase();
   if (kind === 'both' || kind === 'inout') {
@@ -441,6 +512,8 @@ function degree(graph, kind) {
 
 function inDegreeCalculator(links, nodeId) {
   var total = 0;
+  if (!links) return total;
+
   for (var i = 0; i < links.length; i += 1) {
     total += (links[i].toId === nodeId) ? 1 : 0;
   }
@@ -449,6 +522,8 @@ function inDegreeCalculator(links, nodeId) {
 
 function outDegreeCalculator(links, nodeId) {
   var total = 0;
+  if (!links) return total;
+
   for (var i = 0; i < links.length; i += 1) {
     total += (links[i].fromId === nodeId) ? 1 : 0;
   }
@@ -456,10 +531,78 @@ function outDegreeCalculator(links, nodeId) {
 }
 
 function inoutDegreeCalculator(links) {
+  if (!links) return 0;
+
   return links.length;
 }
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
+module.exports = eccentricity;
+
+/**
+ * The eccentricity centrality of a node is the greatest distance between that node and
+ * any other node in the network. 
+ */
+function eccentricity(graph, oriented) {
+  var Q = [];
+  // distance from source
+  var dist = Object.create(null);
+
+  var currentNode;
+  var centrality = Object.create(null);
+
+  graph.forEachNode(setCentralityToZero);
+  graph.forEachNode(calculateCentrality);
+
+  return centrality;
+
+  function setCentralityToZero(node) {
+    centrality[node.id] = 0;
+  }
+
+  function calculateCentrality(node) {
+    currentNode = node.id;
+    singleSourceShortestPath(currentNode);
+    accumulate();
+  }
+
+  function accumulate() {
+    var maxDist = 0;
+    Object.keys(dist).forEach(function (key) {
+      var val = dist[key];
+      if (maxDist < val) maxDist = val;
+    });
+
+    centrality[currentNode] = maxDist;
+  }
+
+  function singleSourceShortestPath(source) {
+    graph.forEachNode(initNode);
+    dist[source] = 0;
+    Q.push(source);
+
+    while (Q.length) {
+      var v = Q.shift();
+      graph.forEachLinkedNode(v, processNode, oriented);
+    }
+
+    function initNode(node) {
+      var nodeId = node.id;
+      dist[nodeId] = -1;
+    }
+
+    function processNode(otherNode) {
+      var w = otherNode.id
+      if (dist[w] === -1) {
+        // Node w is found for the first time
+        dist[w] = dist[v] + 1;
+        Q.push(w);
+      }
+    }
+  }
+}
+
+},{}],11:[function(require,module,exports){
 module.exports = DisjointSet;
 
 function DisjointSet(payload) {
@@ -497,7 +640,430 @@ function union(y) {
   }
 }
 
-},{}],10:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
+module.exports = exposeProperties;
+
+/**
+ * Augments `target` object with getter/setter functions, which modify settings
+ *
+ * @example
+ *  var target = {};
+ *  exposeProperties({ age: 42}, target);
+ *  target.age(); // returns 42
+ *  target.age(24); // make age 24;
+ *
+ *  var filteredTarget = {};
+ *  exposeProperties({ age: 42, name: 'John'}, filteredTarget, ['name']);
+ *  filteredTarget.name(); // returns 'John'
+ *  filteredTarget.age === undefined; // true
+ */
+function exposeProperties(settings, target, filter) {
+  var needsFilter = Object.prototype.toString.call(filter) === '[object Array]';
+  if (needsFilter) {
+    for (var i = 0; i < filter.length; ++i) {
+      augment(settings, target, filter[i]);
+    }
+  } else {
+    for (var key in settings) {
+      augment(settings, target, key);
+    }
+  }
+}
+
+function augment(source, target, key) {
+  if (source.hasOwnProperty(key)) {
+    if (typeof target[key] === 'function') {
+      // this accessor is already defined. Ignore it
+      return;
+    }
+    target[key] = function (value) {
+      if (value !== undefined) {
+        source[key] = value;
+        return target;
+      }
+      return source[key];
+    }
+  }
+}
+
+},{}],13:[function(require,module,exports){
+module.exports = createLayout;
+module.exports.simulator = require('ngraph.physics.simulator');
+
+var eventify = require('ngraph.events');
+
+/**
+ * Creates force based layout for a given graph.
+ *
+ * @param {ngraph.graph} graph which needs to be laid out
+ * @param {object} physicsSettings if you need custom settings
+ * for physics simulator you can pass your own settings here. If it's not passed
+ * a default one will be created.
+ */
+function createLayout(graph, physicsSettings) {
+  if (!graph) {
+    throw new Error('Graph structure cannot be undefined');
+  }
+
+  var createSimulator = require('ngraph.physics.simulator');
+  var physicsSimulator = createSimulator(physicsSettings);
+
+  var nodeMass = defaultNodeMass
+  if (physicsSettings && typeof physicsSettings.nodeMass === 'function') {
+    nodeMass = physicsSettings.nodeMass
+  }
+
+  var nodeBodies = Object.create(null);
+  var springs = {};
+  var bodiesCount = 0;
+
+  var springTransform = physicsSimulator.settings.springTransform || noop;
+
+  // Initialize physics with what we have in the graph:
+  initPhysics();
+  listenToEvents();
+
+  var wasStable = false;
+
+  var api = {
+    /**
+     * Performs one step of iterative layout algorithm
+     *
+     * @returns {boolean} true if the system should be considered stable; Flase otherwise.
+     * The system is stable if no further call to `step()` can improve the layout.
+     */
+    step: function() {
+      if (bodiesCount === 0) return true; // TODO: This will never fire 'stable'
+
+      var lastMove = physicsSimulator.step();
+
+      // Save the movement in case if someone wants to query it in the step
+      // callback.
+      api.lastMove = lastMove;
+
+      // Allow listeners to perform low-level actions after nodes are updated.
+      api.fire('step');
+
+      var ratio = lastMove/bodiesCount;
+      var isStableNow = ratio <= 0.01; // TODO: The number is somewhat arbitrary...
+
+      if (wasStable !== isStableNow) {
+        wasStable = isStableNow;
+        onStableChanged(isStableNow);
+      }
+
+      return isStableNow;
+    },
+
+    /**
+     * For a given `nodeId` returns position
+     */
+    getNodePosition: function (nodeId) {
+      return getInitializedBody(nodeId).pos;
+    },
+
+    /**
+     * Sets position of a node to a given coordinates
+     * @param {string} nodeId node identifier
+     * @param {number} x position of a node
+     * @param {number} y position of a node
+     * @param {number=} z position of node (only if applicable to body)
+     */
+    setNodePosition: function (nodeId) {
+      var body = getInitializedBody(nodeId);
+      body.setPosition.apply(body, Array.prototype.slice.call(arguments, 1));
+      physicsSimulator.invalidateBBox();
+    },
+
+    /**
+     * @returns {Object} Link position by link id
+     * @returns {Object.from} {x, y} coordinates of link start
+     * @returns {Object.to} {x, y} coordinates of link end
+     */
+    getLinkPosition: function (linkId) {
+      var spring = springs[linkId];
+      if (spring) {
+        return {
+          from: spring.from.pos,
+          to: spring.to.pos
+        };
+      }
+    },
+
+    /**
+     * @returns {Object} area required to fit in the graph. Object contains
+     * `x1`, `y1` - top left coordinates
+     * `x2`, `y2` - bottom right coordinates
+     */
+    getGraphRect: function () {
+      return physicsSimulator.getBBox();
+    },
+
+    /**
+     * Iterates over each body in the layout simulator and performs a callback(body, nodeId)
+     */
+    forEachBody: forEachBody,
+
+    /*
+     * Requests layout algorithm to pin/unpin node to its current position
+     * Pinned nodes should not be affected by layout algorithm and always
+     * remain at their position
+     */
+    pinNode: function (node, isPinned) {
+      var body = getInitializedBody(node.id);
+       body.isPinned = !!isPinned;
+    },
+
+    /**
+     * Checks whether given graph's node is currently pinned
+     */
+    isNodePinned: function (node) {
+      return getInitializedBody(node.id).isPinned;
+    },
+
+    /**
+     * Request to release all resources
+     */
+    dispose: function() {
+      graph.off('changed', onGraphChanged);
+      api.fire('disposed');
+    },
+
+    /**
+     * Gets physical body for a given node id. If node is not found undefined
+     * value is returned.
+     */
+    getBody: getBody,
+
+    /**
+     * Gets spring for a given edge.
+     *
+     * @param {string} linkId link identifer. If two arguments are passed then
+     * this argument is treated as formNodeId
+     * @param {string=} toId when defined this parameter denotes head of the link
+     * and first argument is trated as tail of the link (fromId)
+     */
+    getSpring: getSpring,
+
+    /**
+     * [Read only] Gets current physics simulator
+     */
+    simulator: physicsSimulator,
+
+    /**
+     * Gets the graph that was used for layout
+     */
+    graph: graph,
+
+    /**
+     * Gets amount of movement performed during last step opeartion
+     */
+    lastMove: 0
+  };
+
+  eventify(api);
+
+  return api;
+
+  function forEachBody(cb) {
+    Object.keys(nodeBodies).forEach(function(bodyId) {
+      cb(nodeBodies[bodyId], bodyId);
+    });
+  }
+
+  function getSpring(fromId, toId) {
+    var linkId;
+    if (toId === undefined) {
+      if (typeof fromId !== 'object') {
+        // assume fromId as a linkId:
+        linkId = fromId;
+      } else {
+        // assume fromId to be a link object:
+        linkId = fromId.id;
+      }
+    } else {
+      // toId is defined, should grab link:
+      var link = graph.hasLink(fromId, toId);
+      if (!link) return;
+      linkId = link.id;
+    }
+
+    return springs[linkId];
+  }
+
+  function getBody(nodeId) {
+    return nodeBodies[nodeId];
+  }
+
+  function listenToEvents() {
+    graph.on('changed', onGraphChanged);
+  }
+
+  function onStableChanged(isStable) {
+    api.fire('stable', isStable);
+  }
+
+  function onGraphChanged(changes) {
+    for (var i = 0; i < changes.length; ++i) {
+      var change = changes[i];
+      if (change.changeType === 'add') {
+        if (change.node) {
+          initBody(change.node.id);
+        }
+        if (change.link) {
+          initLink(change.link);
+        }
+      } else if (change.changeType === 'remove') {
+        if (change.node) {
+          releaseNode(change.node);
+        }
+        if (change.link) {
+          releaseLink(change.link);
+        }
+      }
+    }
+    bodiesCount = graph.getNodesCount();
+  }
+
+  function initPhysics() {
+    bodiesCount = 0;
+
+    graph.forEachNode(function (node) {
+      initBody(node.id);
+      bodiesCount += 1;
+    });
+
+    graph.forEachLink(initLink);
+  }
+
+  function initBody(nodeId) {
+    var body = nodeBodies[nodeId];
+    if (!body) {
+      var node = graph.getNode(nodeId);
+      if (!node) {
+        throw new Error('initBody() was called with unknown node id');
+      }
+
+      var pos = node.position;
+      if (!pos) {
+        var neighbors = getNeighborBodies(node);
+        pos = physicsSimulator.getBestNewBodyPosition(neighbors);
+      }
+
+      body = physicsSimulator.addBodyAt(pos);
+      body.id = nodeId;
+
+      nodeBodies[nodeId] = body;
+      updateBodyMass(nodeId);
+
+      if (isNodeOriginallyPinned(node)) {
+        body.isPinned = true;
+      }
+    }
+  }
+
+  function releaseNode(node) {
+    var nodeId = node.id;
+    var body = nodeBodies[nodeId];
+    if (body) {
+      nodeBodies[nodeId] = null;
+      delete nodeBodies[nodeId];
+
+      physicsSimulator.removeBody(body);
+    }
+  }
+
+  function initLink(link) {
+    updateBodyMass(link.fromId);
+    updateBodyMass(link.toId);
+
+    var fromBody = nodeBodies[link.fromId],
+        toBody  = nodeBodies[link.toId],
+        spring = physicsSimulator.addSpring(fromBody, toBody, link.length);
+
+    springTransform(link, spring);
+
+    springs[link.id] = spring;
+  }
+
+  function releaseLink(link) {
+    var spring = springs[link.id];
+    if (spring) {
+      var from = graph.getNode(link.fromId),
+          to = graph.getNode(link.toId);
+
+      if (from) updateBodyMass(from.id);
+      if (to) updateBodyMass(to.id);
+
+      delete springs[link.id];
+
+      physicsSimulator.removeSpring(spring);
+    }
+  }
+
+  function getNeighborBodies(node) {
+    // TODO: Could probably be done better on memory
+    var neighbors = [];
+    if (!node.links) {
+      return neighbors;
+    }
+    var maxNeighbors = Math.min(node.links.length, 2);
+    for (var i = 0; i < maxNeighbors; ++i) {
+      var link = node.links[i];
+      var otherBody = link.fromId !== node.id ? nodeBodies[link.fromId] : nodeBodies[link.toId];
+      if (otherBody && otherBody.pos) {
+        neighbors.push(otherBody);
+      }
+    }
+
+    return neighbors;
+  }
+
+  function updateBodyMass(nodeId) {
+    var body = nodeBodies[nodeId];
+    body.mass = nodeMass(nodeId);
+    if (Number.isNaN(body.mass)) {
+      throw new Error('Node mass should be a number')
+    }
+  }
+
+  /**
+   * Checks whether graph node has in its settings pinned attribute,
+   * which means layout algorithm cannot move it. Node can be preconfigured
+   * as pinned, if it has "isPinned" attribute, or when node.data has it.
+   *
+   * @param {Object} node a graph node to check
+   * @return {Boolean} true if node should be treated as pinned; false otherwise.
+   */
+  function isNodeOriginallyPinned(node) {
+    return (node && (node.isPinned || (node.data && node.data.isPinned)));
+  }
+
+  function getInitializedBody(nodeId) {
+    var body = nodeBodies[nodeId];
+    if (!body) {
+      initBody(nodeId);
+      body = nodeBodies[nodeId];
+    }
+    return body;
+  }
+
+  /**
+   * Calculates mass of a body, which corresponds to node with given id.
+   *
+   * @param {String|Number} nodeId identifier of a node, for which body mass needs to be calculated
+   * @returns {Number} recommended mass of the body;
+   */
+  function defaultNodeMass(nodeId) {
+    var links = graph.getLinks(nodeId);
+    if (!links) return 1;
+    return 1 + links.length / 3.0;
+  }
+}
+
+function noop() { }
+
+},{"ngraph.events":14,"ngraph.physics.simulator":24}],14:[function(require,module,exports){
 module.exports = function(subject) {
   validateSubject(subject);
 
@@ -587,357 +1153,7 @@ function validateSubject(subject) {
   }
 }
 
-},{}],11:[function(require,module,exports){
-module.exports = exposeProperties;
-
-/**
- * Augments `target` object with getter/setter functions, which modify settings
- *
- * @example
- *  var target = {};
- *  exposeProperties({ age: 42}, target);
- *  target.age(); // returns 42
- *  target.age(24); // make age 24;
- *
- *  var filteredTarget = {};
- *  exposeProperties({ age: 42, name: 'John'}, filteredTarget, ['name']);
- *  filteredTarget.name(); // returns 'John'
- *  filteredTarget.age === undefined; // true
- */
-function exposeProperties(settings, target, filter) {
-  var needsFilter = Object.prototype.toString.call(filter) === '[object Array]';
-  if (needsFilter) {
-    for (var i = 0; i < filter.length; ++i) {
-      augment(settings, target, filter[i]);
-    }
-  } else {
-    for (var key in settings) {
-      augment(settings, target, key);
-    }
-  }
-}
-
-function augment(source, target, key) {
-  if (source.hasOwnProperty(key)) {
-    if (typeof target[key] === 'function') {
-      // this accessor is already defined. Ignore it
-      return;
-    }
-    target[key] = function (value) {
-      if (value !== undefined) {
-        source[key] = value;
-        return target;
-      }
-      return source[key];
-    }
-  }
-}
-
-},{}],12:[function(require,module,exports){
-module.exports = createLayout;
-module.exports.simulator = require('ngraph.physics.simulator');
-
-/**
- * Creates force based layout for a given graph.
- * @param {ngraph.graph} graph which needs to be laid out
- * @param {object} physicsSettings if you need custom settings
- * for physics simulator you can pass your own settings here. If it's not passed
- * a default one will be created.
- */
-function createLayout(graph, physicsSettings) {
-  if (!graph) {
-    throw new Error('Graph structure cannot be undefined');
-  }
-
-  var createSimulator = require('ngraph.physics.simulator');
-  var physicsSimulator = createSimulator(physicsSettings);
-
-  var nodeBodies = typeof Object.create === 'function' ? Object.create(null) : {};
-  var springs = {};
-
-  var springTransform = physicsSimulator.settings.springTransform || noop;
-
-  // Initialize physical objects according to what we have in the graph:
-  initPhysics();
-  listenToGraphEvents();
-
-  var api = {
-    /**
-     * Performs one step of iterative layout algorithm
-     */
-    step: function() {
-      return physicsSimulator.step();
-    },
-
-    /**
-     * For a given `nodeId` returns position
-     */
-    getNodePosition: function (nodeId) {
-      return getInitializedBody(nodeId).pos;
-    },
-
-    /**
-     * Sets position of a node to a given coordinates
-     * @param {string} nodeId node identifier
-     * @param {number} x position of a node
-     * @param {number} y position of a node
-     * @param {number=} z position of node (only if applicable to body)
-     */
-    setNodePosition: function (nodeId) {
-      var body = getInitializedBody(nodeId);
-      body.setPosition.apply(body, Array.prototype.slice.call(arguments, 1));
-    },
-
-    /**
-     * @returns {Object} Link position by link id
-     * @returns {Object.from} {x, y} coordinates of link start
-     * @returns {Object.to} {x, y} coordinates of link end
-     */
-    getLinkPosition: function (linkId) {
-      var spring = springs[linkId];
-      if (spring) {
-        return {
-          from: spring.from.pos,
-          to: spring.to.pos
-        };
-      }
-    },
-
-    /**
-     * @returns {Object} area required to fit in the graph. Object contains
-     * `x1`, `y1` - top left coordinates
-     * `x2`, `y2` - bottom right coordinates
-     */
-    getGraphRect: function () {
-      return physicsSimulator.getBBox();
-    },
-
-    /*
-     * Requests layout algorithm to pin/unpin node to its current position
-     * Pinned nodes should not be affected by layout algorithm and always
-     * remain at their position
-     */
-    pinNode: function (node, isPinned) {
-      var body = getInitializedBody(node.id);
-       body.isPinned = !!isPinned;
-    },
-
-    /**
-     * Checks whether given graph's node is currently pinned
-     */
-    isNodePinned: function (node) {
-      return getInitializedBody(node.id).isPinned;
-    },
-
-    /**
-     * Request to release all resources
-     */
-    dispose: function() {
-      graph.off('changed', onGraphChanged);
-    },
-
-    /**
-     * Gets physical body for a given node id. If node is not found undefined
-     * value is returned.
-     */
-    getBody: getBody,
-
-    /**
-     * Gets spring for a given edge.
-     *
-     * @param {string} linkId link identifer. If two arguments are passed then
-     * this argument is treated as formNodeId
-     * @param {string=} toId when defined this parameter denotes head of the link
-     * and first argument is trated as tail of the link (fromId)
-     */
-    getSpring: getSpring,
-
-    /**
-     * [Read only] Gets current physics simulator
-     */
-    simulator: physicsSimulator
-  };
-
-  return api;
-
-  function getSpring(fromId, toId) {
-    var linkId;
-    if (toId === undefined) {
-      if (typeof fromId === 'string') {
-        // assume fromId as a linkId:
-        linkId = fromId;
-      } else {
-        // assume fromId to be a link object:
-        linkId = fromId.id;
-      }
-    } else {
-      // toId is defined, should grab link:
-      var link = graph.hasLink(fromId, toId);
-      if (!link) return;
-      linkId = link.id;
-    }
-
-    return springs[linkId];
-  }
-
-  function getBody(nodeId) {
-    return nodeBodies[nodeId];
-  }
-
-  function listenToGraphEvents() {
-    graph.on('changed', onGraphChanged);
-  }
-
-  function onGraphChanged(changes) {
-    for (var i = 0; i < changes.length; ++i) {
-      var change = changes[i];
-      if (change.changeType === 'add') {
-        if (change.node) {
-          initBody(change.node.id);
-        }
-        if (change.link) {
-          initLink(change.link);
-        }
-      } else if (change.changeType === 'remove') {
-        if (change.node) {
-          releaseNode(change.node);
-        }
-        if (change.link) {
-          releaseLink(change.link);
-        }
-      }
-    }
-  }
-
-  function initPhysics() {
-    graph.forEachNode(function (node) {
-      initBody(node.id);
-    });
-    graph.forEachLink(initLink);
-  }
-
-  function initBody(nodeId) {
-    var body = nodeBodies[nodeId];
-    if (!body) {
-      var node = graph.getNode(nodeId);
-      if (!node) {
-        throw new Error('initBody() was called with unknown node id');
-      }
-
-      var pos = node.position;
-      if (!pos) {
-        var neighbors = getNeighborBodies(node);
-        pos = physicsSimulator.getBestNewBodyPosition(neighbors);
-      }
-
-      body = physicsSimulator.addBodyAt(pos);
-
-      nodeBodies[nodeId] = body;
-      updateBodyMass(nodeId);
-
-      if (isNodeOriginallyPinned(node)) {
-        body.isPinned = true;
-      }
-    }
-  }
-
-  function releaseNode(node) {
-    var nodeId = node.id;
-    var body = nodeBodies[nodeId];
-    if (body) {
-      nodeBodies[nodeId] = null;
-      delete nodeBodies[nodeId];
-
-      physicsSimulator.removeBody(body);
-    }
-  }
-
-  function initLink(link) {
-    updateBodyMass(link.fromId);
-    updateBodyMass(link.toId);
-
-    var fromBody = nodeBodies[link.fromId],
-        toBody  = nodeBodies[link.toId],
-        spring = physicsSimulator.addSpring(fromBody, toBody, link.length);
-
-    springTransform(link, spring);
-
-    springs[link.id] = spring;
-  }
-
-  function releaseLink(link) {
-    var spring = springs[link.id];
-    if (spring) {
-      var from = graph.getNode(link.fromId),
-          to = graph.getNode(link.toId);
-
-      if (from) updateBodyMass(from.id);
-      if (to) updateBodyMass(to.id);
-
-      delete springs[link.id];
-
-      physicsSimulator.removeSpring(spring);
-    }
-  }
-
-  function getNeighborBodies(node) {
-    // TODO: Could probably be done better on memory
-    var neighbors = [];
-    if (!node.links) {
-      return neighbors;
-    }
-    var maxNeighbors = Math.min(node.links.length, 2);
-    for (var i = 0; i < maxNeighbors; ++i) {
-      var link = node.links[i];
-      var otherBody = link.fromId !== node.id ? nodeBodies[link.fromId] : nodeBodies[link.toId];
-      if (otherBody && otherBody.pos) {
-        neighbors.push(otherBody);
-      }
-    }
-
-    return neighbors;
-  }
-
-  function updateBodyMass(nodeId) {
-    var body = nodeBodies[nodeId];
-    body.mass = nodeMass(nodeId);
-  }
-
-  /**
-   * Checks whether graph node has in its settings pinned attribute,
-   * which means layout algorithm cannot move it. Node can be preconfigured
-   * as pinned, if it has "isPinned" attribute, or when node.data has it.
-   *
-   * @param {Object} node a graph node to check
-   * @return {Boolean} true if node should be treated as pinned; false otherwise.
-   */
-  function isNodeOriginallyPinned(node) {
-    return (node && (node.isPinned || (node.data && node.data.isPinned)));
-  }
-
-  function getInitializedBody(nodeId) {
-    var body = nodeBodies[nodeId];
-    if (!body) {
-      initBody(nodeId);
-      body = nodeBodies[nodeId];
-    }
-    return body;
-  }
-
-  /**
-   * Calculates mass of a body, which corresponds to node with given id.
-   *
-   * @param {String|Number} nodeId identifier of a node, for which body mass needs to be calculated
-   * @returns {Number} recommended mass of the body;
-   */
-  function nodeMass(nodeId) {
-    return 1 + graph.getLinks(nodeId).length / 3.0;
-  }
-}
-
-function noop() { }
-
-},{"ngraph.physics.simulator":19}],13:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 module.exports = load;
 
 var createGraph = require('ngraph.graph');
@@ -982,10 +1198,16 @@ function load(jsonGraph, nodeTransform, linkTransform) {
 
 function id(x) { return x; }
 
-},{"ngraph.graph":14}],14:[function(require,module,exports){
+},{"ngraph.graph":17}],16:[function(require,module,exports){
+arguments[4][14][0].apply(exports,arguments)
+},{"dup":14}],17:[function(require,module,exports){
 /**
  * @fileOverview Contains definition of the core graph object.
  */
+
+// TODO: need to change storage layer:
+// 1. Be able to get all nodes O(1)
+// 2. Be able to get number of links O(1)
 
 /**
  * @example
@@ -1008,12 +1230,22 @@ function createGraph(options) {
   // array is used to speed up all links enumeration. This is inefficient
   // in terms of memory, but simplifies coding.
   options = options || {};
-  if (options.uniqueLinkId === undefined) {
-    // Request each link id to be unique between same nodes. This negatively
-    // impacts `addLink()` performance (O(n), where n - number of edges of each
-    // vertex), but makes operations with multigraphs more accessible.
-    options.uniqueLinkId = true;
+  if ('uniqueLinkId' in options) {
+    console.warn(
+      'ngraph.graph: Starting from version 0.14 `uniqueLinkId` is deprecated.\n' +
+      'Use `multigraph` option instead\n',
+      '\n',
+      'Note: there is also change in default behavior: From now own each graph\n'+
+      'is considered to be not a multigraph by default (each edge is unique).'
+    );
+
+    options.multigraph = options.uniqueLinkId;
   }
+
+  // Dear reader, the non-multigraphs do not guarantee that there is only
+  // one link for a given pair of node. When this option is set to false
+  // we can save some memory and CPU (18% faster for non-multigraph);
+  if (options.multigraph === undefined) options.multigraph = false;
 
   var nodes = typeof Object.create === 'function' ? Object.create(null) : {},
     links = [],
@@ -1023,7 +1255,7 @@ function createGraph(options) {
     suspendEvents = 0,
 
     forEachNode = createNodeIterator(),
-    createLink = options.uniqueLinkId ? createUniqueLink : createSingleLink,
+    createLink = options.multigraph ? createUniqueLink : createSingleLink,
 
     // Our graph API provides means to listen to graph changes. Users can subscribe
     // to be notified about changes in the graph by using `on` method. However
@@ -1049,8 +1281,6 @@ function createGraph(options) {
      * its data is extended with whatever comes in 'data' argument.
      *
      * @param nodeId the node's identifier. A string or number is preferred.
-     *   note: If you request options.uniqueLinkId, then node id should not
-     *   contain '👉 '. This will break link identifiers
      * @param [data] additional data for the node being added. If node already
      *   exists its data object is augmented with the new one.
      *
@@ -1104,14 +1334,14 @@ function createGraph(options) {
      *
      * @return number of nodes in the graph.
      */
-    getNodesCount: function() {
+    getNodesCount: function () {
       return nodesCount;
     },
 
     /**
      * Gets total number of links in the graph.
      */
-    getLinksCount: function() {
+    getLinksCount: function () {
       return links.length;
     },
 
@@ -1184,6 +1414,16 @@ function createGraph(options) {
     hasLink: getLink,
 
     /**
+     * Detects whether there is a node with given id
+     * 
+     * Operation complexity is O(1)
+     * NOTE: this function is synonim for getNode()
+     *
+     * @returns node if there is one; Falsy value otherwise.
+     */
+    hasNode: getNode,
+
+    /**
      * Gets an edge between two nodes.
      * Operation complexity is O(n) where n - number of links of a node.
      *
@@ -1246,15 +1486,13 @@ function createGraph(options) {
 
     var node = getNode(nodeId);
     if (!node) {
-      // TODO: Should I check for 👉  here?
-      node = new Node(nodeId);
+      node = new Node(nodeId, data);
       nodesCount++;
       recordNodeChange(node, 'add');
     } else {
+      node.data = data;
       recordNodeChange(node, 'update');
     }
-
-    node.data = data;
 
     nodes[nodeId] = node;
 
@@ -1274,9 +1512,12 @@ function createGraph(options) {
 
     enterModification();
 
-    while (node.links.length) {
-      var link = node.links[0];
-      removeLink(link);
+    var prevLinks = node.links;
+    if (prevLinks) {
+      node.links = null;
+      for(var i = 0; i < prevLinks.length; ++i) {
+        removeLink(prevLinks[i]);
+      }
     }
 
     delete nodes[nodeId];
@@ -1301,10 +1542,10 @@ function createGraph(options) {
     links.push(link);
 
     // TODO: this is not cool. On large graphs potentially would consume more memory.
-    fromNode.links.push(link);
+    addLinkToNode(fromNode, link);
     if (fromId !== toId) {
       // make sure we are not duplicating links for self-loops
-      toNode.links.push(link);
+      addLinkToNode(toNode, link);
     }
 
     recordLinkChange(link, 'add');
@@ -1315,18 +1556,20 @@ function createGraph(options) {
   }
 
   function createSingleLink(fromId, toId, data) {
-    var linkId = fromId.toString() + toId.toString();
+    var linkId = makeLinkId(fromId, toId);
     return new Link(fromId, toId, data, linkId);
   }
 
   function createUniqueLink(fromId, toId, data) {
-    var linkId = fromId.toString() + '👉 ' + toId.toString();
+    // TODO: Get rid of this method.
+    var linkId = makeLinkId(fromId, toId);
     var isMultiEdge = multiEdges.hasOwnProperty(linkId);
     if (isMultiEdge || getLink(fromId, toId)) {
       if (!isMultiEdge) {
         multiEdges[linkId] = 0;
       }
-      linkId += '@' + (++multiEdges[linkId]);
+      var suffix = '@' + (++multiEdges[linkId]);
+      linkId = makeLinkId(fromId + suffix, toId + suffix);
     }
 
     return new Link(fromId, toId, data, linkId);
@@ -1378,7 +1621,7 @@ function createGraph(options) {
     // TODO: Use sorted links to speed this up
     var node = getNode(fromNodeId),
       i;
-    if (!node) {
+    if (!node || !node.links) {
       return null;
     }
 
@@ -1500,6 +1743,8 @@ function createGraph(options) {
 
 // need this for old browsers. Should this be a separate module?
 function indexOfElementInArray(element, array) {
+  if (!array) return -1;
+
   if (array.indexOf) {
     return array.indexOf(element);
   }
@@ -1519,12 +1764,19 @@ function indexOfElementInArray(element, array) {
 /**
  * Internal structure to represent node;
  */
-function Node(id) {
+function Node(id, data) {
   this.id = id;
-  this.links = [];
-  this.data = null;
+  this.links = null;
+  this.data = data;
 }
 
+function addLinkToNode(node, link) {
+  if (node.links) {
+    node.links.push(link);
+  } else {
+    node.links = [link];
+  }
+}
 
 /**
  * Internal structure to represent links;
@@ -1536,310 +1788,490 @@ function Link(fromId, toId, data, id) {
   this.id = id;
 }
 
-},{"ngraph.events":10}],15:[function(require,module,exports){
-module.exports = {
-  ladder: ladder,
-  complete: complete,
-  completeBipartite: completeBipartite,
-  balancedBinTree: balancedBinTree,
-  path: path,
-  circularLadder: circularLadder,
-  grid: grid,
-  grid3: grid3,
-  noLinks: noLinks,
-  wattsStrogatz: wattsStrogatz
-};
+function hashCode(str) {
+  var hash = 0, i, chr, len;
+  if (str.length == 0) return hash;
+  for (i = 0, len = str.length; i < len; i++) {
+    chr   = str.charCodeAt(i);
+    hash  = ((hash << 5) - hash) + chr;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return hash;
+}
 
+function makeLinkId(fromId, toId) {
+  return fromId.toString() + '👉 ' + toId.toString();
+}
+
+},{"ngraph.events":16}],18:[function(require,module,exports){
 var createGraph = require('ngraph.graph');
 
-function ladder(n) {
-/**
- * Ladder graph is a graph in form of ladder
- * @param {Number} n Represents number of steps in the ladder
- */
-  if (!n || n < 0) {
-    throw new Error("Invalid number of nodes");
-  }
+module.exports = factory(createGraph);
 
-  var g = createGraph(),
-      i;
+// Allow other developers have their own createGraph
+module.exports.factory = factory;
 
-  for (i = 0; i < n - 1; ++i) {
-    g.addLink(i, i + 1);
-    // first row
-    g.addLink(n + i, n + i + 1);
-    // second row
-    g.addLink(i, n + i);
-    // ladder's step
-  }
+function factory(createGraph) {
+  return {
+    ladder: ladder,
+    complete: complete,
+    completeBipartite: completeBipartite,
+    balancedBinTree: balancedBinTree,
+    path: path,
+    circularLadder: circularLadder,
+    grid: grid,
+    grid3: grid3,
+    noLinks: noLinks,
+    wattsStrogatz: wattsStrogatz,
+    cliqueCircle: cliqueCircle
+  };
 
-  g.addLink(n - 1, 2 * n - 1);
-  // last step in the ladder;
 
-  return g;
-}
-
-function circularLadder(n) {
-/**
- * Circular ladder with n steps.
- *
- * @param {Number} n of steps in the ladder.
- */
+  function ladder(n) {
+  /**
+  * Ladder graph is a graph in form of ladder
+  * @param {Number} n Represents number of steps in the ladder
+  */
     if (!n || n < 0) {
-        throw new Error("Invalid number of nodes");
+      throw new Error("Invalid number of nodes");
     }
 
-    var g = ladder(n);
+    var g = createGraph(),
+        i;
 
-    g.addLink(0, n - 1);
-    g.addLink(n, 2 * n - 1);
+    for (i = 0; i < n - 1; ++i) {
+      g.addLink(i, i + 1);
+      // first row
+      g.addLink(n + i, n + i + 1);
+      // second row
+      g.addLink(i, n + i);
+      // ladder's step
+    }
+
+    g.addLink(n - 1, 2 * n - 1);
+    // last step in the ladder;
+
     return g;
-}
-
-function complete(n) {
-/**
- * Complete graph Kn.
- *
- * @param {Number} n represents number of nodes in the complete graph.
- */
-  if (!n || n < 1) {
-    throw new Error("At least two nodes are expected for complete graph");
   }
 
-  var g = createGraph(),
-      i,
-      j;
+  function circularLadder(n) {
+  /**
+  * Circular ladder with n steps.
+  *
+  * @param {Number} n of steps in the ladder.
+  */
+      if (!n || n < 0) {
+          throw new Error("Invalid number of nodes");
+      }
 
-  for (i = 0; i < n; ++i) {
-    for (j = i + 1; j < n; ++j) {
-      if (i !== j) {
+      var g = ladder(n);
+
+      g.addLink(0, n - 1);
+      g.addLink(n, 2 * n - 1);
+      return g;
+  }
+
+  function complete(n) {
+  /**
+  * Complete graph Kn.
+  *
+  * @param {Number} n represents number of nodes in the complete graph.
+  */
+    if (!n || n < 1) {
+      throw new Error("At least two nodes are expected for complete graph");
+    }
+
+    var g = createGraph(),
+        i,
+        j;
+
+    for (i = 0; i < n; ++i) {
+      for (j = i + 1; j < n; ++j) {
+        if (i !== j) {
+          g.addLink(i, j);
+        }
+      }
+    }
+
+    return g;
+  }
+
+  function completeBipartite (n, m) {
+  /**
+  * Complete bipartite graph K n,m. Each node in the
+  * first partition is connected to all nodes in the second partition.
+  *
+  * @param {Number} n represents number of nodes in the first graph partition
+  * @param {Number} m represents number of nodes in the second graph partition
+  */
+    if (!n || !m || n < 0 || m < 0) {
+      throw new Error("Graph dimensions are invalid. Number of nodes in each partition should be greater than 0");
+    }
+
+    var g = createGraph(),
+        i, j;
+
+    for (i = 0; i < n; ++i) {
+      for (j = n; j < n + m; ++j) {
         g.addLink(i, j);
       }
     }
-  }
 
-  return g;
-}
-
-function completeBipartite (n, m) {
-/**
- * Complete bipartite graph K n,m. Each node in the
- * first partition is connected to all nodes in the second partition.
- *
- * @param {Number} n represents number of nodes in the first graph partition
- * @param {Number} m represents number of nodes in the second graph partition
- */
-  if (!n || !m || n < 0 || m < 0) {
-    throw new Error("Graph dimensions are invalid. Number of nodes in each partition should be greater than 0");
-  }
-
-  var g = createGraph(),
-      i, j;
-
-  for (i = 0; i < n; ++i) {
-    for (j = n; j < n + m; ++j) {
-      g.addLink(i, j);
-    }
-  }
-
-  return g;
-}
-
-function path(n) {
-/**
- * Path graph with n steps.
- *
- * @param {Number} n number of nodes in the path
- */
-  if (!n || n < 0) {
-    throw new Error("Invalid number of nodes");
-  }
-
-  var g = createGraph(),
-      i;
-
-  g.addNode(0);
-
-  for (i = 1; i < n; ++i) {
-    g.addLink(i - 1, i);
-  }
-
-  return g;
-}
-
-
-function grid(n, m) {
-/**
- * Grid graph with n rows and m columns.
- *
- * @param {Number} n of rows in the graph.
- * @param {Number} m of columns in the graph.
- */
-  if (n < 1 || m < 1) {
-    throw new Error("Invalid number of nodes in grid graph");
-  }
-  var g = createGraph(),
-      i,
-      j;
-  if (n === 1 && m === 1) {
-    g.addNode(0);
     return g;
   }
 
-  for (i = 0; i < n; ++i) {
-    for (j = 0; j < m; ++j) {
-      var node = i + j * n;
-      if (i > 0) { g.addLink(node, i - 1 + j * n); }
-      if (j > 0) { g.addLink(node, i + (j - 1) * n); }
+  function path(n) {
+  /**
+  * Path graph with n steps.
+  *
+  * @param {Number} n number of nodes in the path
+  */
+    if (!n || n < 0) {
+      throw new Error("Invalid number of nodes");
     }
-  }
 
-  return g;
-}
+    var g = createGraph(),
+        i;
 
-function grid3(n, m, z) {
-/**
- * 3D grid with n rows and m columns and z levels.
- *
- * @param {Number} n of rows in the graph.
- * @param {Number} m of columns in the graph.
- * @param {Number} z of levels in the graph.
- */
-  if (n < 1 || m < 1 || z < 1) {
-    throw new Error("Invalid number of nodes in grid3 graph");
-  }
-  var g = createGraph(),
-      i, j, k;
-
-  if (n === 1 && m === 1 && z === 1) {
     g.addNode(0);
+
+    for (i = 1; i < n; ++i) {
+      g.addLink(i - 1, i);
+    }
+
     return g;
   }
 
-  for (k = 0; k < z; ++k) {
+
+  function grid(n, m) {
+  /**
+  * Grid graph with n rows and m columns.
+  *
+  * @param {Number} n of rows in the graph.
+  * @param {Number} m of columns in the graph.
+  */
+    if (n < 1 || m < 1) {
+      throw new Error("Invalid number of nodes in grid graph");
+    }
+    var g = createGraph(),
+        i,
+        j;
+    if (n === 1 && m === 1) {
+      g.addNode(0);
+      return g;
+    }
+
     for (i = 0; i < n; ++i) {
       for (j = 0; j < m; ++j) {
-        var level = k * n * m;
-        var node = i + j * n + level;
-        if (i > 0) { g.addLink(node, i - 1 + j * n + level); }
-        if (j > 0) { g.addLink(node, i + (j - 1) * n + level); }
-        if (k > 0) { g.addLink(node, i + j * n + (k - 1) * n * m ); }
+        var node = i + j * n;
+        if (i > 0) { g.addLink(node, i - 1 + j * n); }
+        if (j > 0) { g.addLink(node, i + (j - 1) * n); }
+      }
+    }
+
+    return g;
+  }
+
+  function grid3(n, m, z) {
+  /**
+  * 3D grid with n rows and m columns and z levels.
+  *
+  * @param {Number} n of rows in the graph.
+  * @param {Number} m of columns in the graph.
+  * @param {Number} z of levels in the graph.
+  */
+    if (n < 1 || m < 1 || z < 1) {
+      throw new Error("Invalid number of nodes in grid3 graph");
+    }
+    var g = createGraph(),
+        i, j, k;
+
+    if (n === 1 && m === 1 && z === 1) {
+      g.addNode(0);
+      return g;
+    }
+
+    for (k = 0; k < z; ++k) {
+      for (i = 0; i < n; ++i) {
+        for (j = 0; j < m; ++j) {
+          var level = k * n * m;
+          var node = i + j * n + level;
+          if (i > 0) { g.addLink(node, i - 1 + j * n + level); }
+          if (j > 0) { g.addLink(node, i + (j - 1) * n + level); }
+          if (k > 0) { g.addLink(node, i + j * n + (k - 1) * n * m ); }
+        }
+      }
+    }
+
+    return g;
+  }
+
+  function balancedBinTree(n) {
+  /**
+  * Balanced binary tree with n levels.
+  *
+  * @param {Number} n of levels in the binary tree
+  */
+    if (n < 0) {
+      throw new Error("Invalid number of nodes in balanced tree");
+    }
+    var g = createGraph(),
+        count = Math.pow(2, n),
+        level;
+
+    if (n === 0) {
+      g.addNode(1);
+    }
+
+    for (level = 1; level < count; ++level) {
+      var root = level,
+        left = root * 2,
+        right = root * 2 + 1;
+
+      g.addLink(root, left);
+      g.addLink(root, right);
+    }
+
+    return g;
+  }
+
+  function noLinks(n) {
+  /**
+  * Graph with no links
+  *
+  * @param {Number} n of nodes in the graph
+  */
+    if (n < 0) {
+      throw new Error("Number of nodes should be >= 0");
+    }
+
+    var g = createGraph(), i;
+    for (i = 0; i < n; ++i) {
+      g.addNode(i);
+    }
+
+    return g;
+  }
+
+  function cliqueCircle(cliqueCount, cliqueSize) {
+  /**
+  * A circular graph with cliques instead of individual nodes
+  *
+  * @param {Number} cliqueCount number of cliques inside circle
+  * @param {Number} cliqueSize number of nodes inside each clique
+  */
+
+    if (cliqueCount < 1) throw new Error('Invalid number of cliqueCount in cliqueCircle');
+    if (cliqueSize < 1) throw new Error('Invalid number of cliqueSize in cliqueCircle');
+
+    var graph = createGraph();
+
+    for (var i = 0; i < cliqueCount; ++i) {
+      appendClique(cliqueSize, i * cliqueSize)
+
+      if (i > 0) {
+        graph.addLink(i * cliqueSize, i * cliqueSize - 1);
+      }
+    }
+    graph.addLink(0, graph.getNodesCount() - 1);
+
+    return graph;
+
+    function appendClique(size, from) {
+      for (var i = 0; i < size; ++i) {
+        graph.addNode(i + from)
+      }
+
+      for (var i = 0; i < size; ++i) {
+        for (var j = i + 1; j < size; ++j) {
+          graph.addLink(i + from, j + from)
+        }
       }
     }
   }
 
-  return g;
-}
+  function wattsStrogatz(n, k, p, seed) {
+  /**
+  * Watts-Strogatz small-world graph.
+  *
+  * @param {Number} n The number of nodes
+  * @param {Number} k Each node is connected to k nearest neighbors in ring topology
+  * @param {Number} p The probability of rewiring each edge
 
-function balancedBinTree(n) {
-/**
- * Balanced binary tree with n levels.
- *
- * @param {Number} n of levels in the binary tree
- */
-  if (n < 0) {
-    throw new Error("Invalid number of nodes in balanced tree");
-  }
-  var g = createGraph(),
-      count = Math.pow(2, n),
-      level;
-
-  if (n === 0) {
-    g.addNode(1);
-  }
-
-  for (level = 1; level < count; ++level) {
-    var root = level,
-      left = root * 2,
-      right = root * 2 + 1;
-
-    g.addLink(root, left);
-    g.addLink(root, right);
-  }
-
-  return g;
-}
-
-function noLinks(n) {
-/**
- * Graph with no links
- *
- * @param {Number} n of nodes in the graph
- */
-  if (n < 0) {
-    throw new Error("Number of nodes shoul be >= 0");
-  }
-
-  var g = createGraph(), i;
-  for (i = 0; i < n; ++i) {
-    g.addNode(i);
-  }
-
-  return g;
-}
-
-function wattsStrogatz(n, k, p, seed) {
-/**
- * Watts-Strogatz small-world graph.
- *
- * @param {Number} n The number of nodes
- * @param {Number} k Each node is connected to k nearest neighbors in ring topology
- * @param {Number} p The probability of rewiring each edge
-
- * @see https://github.com/networkx/networkx/blob/master/networkx/generators/random_graphs.py
- */
-  if (k >= n) throw new Error('Choose smaller `k`. It cannot be larger than number of nodes `n`');
+  * @see https://github.com/networkx/networkx/blob/master/networkx/generators/random_graphs.py
+  */
+    if (k >= n) throw new Error('Choose smaller `k`. It cannot be larger than number of nodes `n`');
 
 
-  var random = require('ngraph.random').random(seed || 42);
+    var random = require('ngraph.random').random(seed || 42);
 
-  var g = createGraph(), i, to;
-  for (i = 0; i < n; ++i) {
-    g.addNode(i);
-  }
-
-  // connect each node to k/2 neighbors
-  var neighborsSize = Math.floor(k/2 + 1);
-  for (var j = 1; j < neighborsSize; ++j) {
+    var g = createGraph(), i, to;
     for (i = 0; i < n; ++i) {
-      to = (j + i) % n;
-      g.addLink(i, to);
+      g.addNode(i);
     }
-  }
 
-  // rewire edges from each node
-  // loop over all nodes in order (label) and neighbors in order (distance)
-  // no self loops or multiple edges allowed
-  for (j = 1; j < neighborsSize; ++j) {
-    for (i = 0; i < n; ++i) {
-      if (random.nextDouble() < p) {
-        var from = i;
+    // connect each node to k/2 neighbors
+    var neighborsSize = Math.floor(k/2 + 1);
+    for (var j = 1; j < neighborsSize; ++j) {
+      for (i = 0; i < n; ++i) {
         to = (j + i) % n;
-
-        var newTo = random.next(n);
-        var needsRewire = (newTo === from || g.hasLink(from, newTo));
-        if (needsRewire && g.getLinks(from).length === n - 1) {
-          // we cannot rewire this node, it has too many links.
-          continue;
-        }
-        // Enforce no self-loops or multiple edges
-        while (needsRewire) {
-          newTo = random.next(n);
-          needsRewire = (newTo === from || g.hasLink(from, newTo));
-        }
-        var link = g.hasLink(from, to);
-        g.removeLink(link);
-        g.addLink(from, newTo);
+        g.addLink(i, to);
       }
     }
-  }
 
-  return g;
+    // rewire edges from each node
+    // loop over all nodes in order (label) and neighbors in order (distance)
+    // no self loops or multiple edges allowed
+    for (j = 1; j < neighborsSize; ++j) {
+      for (i = 0; i < n; ++i) {
+        if (random.nextDouble() < p) {
+          var from = i;
+          to = (j + i) % n;
+
+          var newTo = random.next(n);
+          var needsRewire = (newTo === from || g.hasLink(from, newTo));
+          if (needsRewire && g.getLinks(from).length === n - 1) {
+            // we cannot rewire this node, it has too many links.
+            continue;
+          }
+          // Enforce no self-loops or multiple edges
+          while (needsRewire) {
+            newTo = random.next(n);
+            needsRewire = (newTo === from || g.hasLink(from, newTo));
+          }
+          var link = g.hasLink(from, to);
+          g.removeLink(link);
+          g.addLink(from, newTo);
+        }
+      }
+    }
+
+    return g;
+  }
 }
 
-},{"ngraph.graph":16,"ngraph.random":30}],16:[function(require,module,exports){
+},{"ngraph.graph":20,"ngraph.random":21}],19:[function(require,module,exports){
 arguments[4][14][0].apply(exports,arguments)
-},{"dup":14,"ngraph.events":10}],17:[function(require,module,exports){
+},{"dup":14}],20:[function(require,module,exports){
+arguments[4][17][0].apply(exports,arguments)
+},{"dup":17,"ngraph.events":19}],21:[function(require,module,exports){
+module.exports = random;
+
+// TODO: Deprecate?
+module.exports.random = random,
+module.exports.randomIterator = randomIterator
+
+/**
+ * Creates seeded PRNG with two methods:
+ *   next() and nextDouble()
+ */
+function random(inputSeed) {
+  var seed = typeof inputSeed === 'number' ? inputSeed : (+new Date());
+  return new Generator(seed)
+}
+
+function Generator(seed) {
+  this.seed = seed;
+}
+
+/**
+  * Generates random integer number in the range from 0 (inclusive) to maxValue (exclusive)
+  *
+  * @param maxValue Number REQUIRED. Omitting this number will result in NaN values from PRNG.
+  */
+Generator.prototype.next = next;
+
+/**
+  * Generates random double number in the range from 0 (inclusive) to 1 (exclusive)
+  * This function is the same as Math.random() (except that it could be seeded)
+  */
+Generator.prototype.nextDouble = nextDouble;
+
+/**
+ * Returns a random real number uniformly in [0, 1)
+ */
+Generator.prototype.uniform = nextDouble;
+
+Generator.prototype.gaussian = gaussian;
+
+function gaussian() {
+  // use the polar form of the Box-Muller transform
+  // based on https://introcs.cs.princeton.edu/java/23recursion/StdRandom.java
+  var r, x, y;
+  do {
+    x = this.nextDouble() * 2 - 1;
+    y = this.nextDouble() * 2 - 1;
+    r = x * x + y * y;
+  } while (r >= 1 || r === 0);
+
+  return x * Math.sqrt(-2 * Math.log(r)/r);
+}
+
+function nextDouble() {
+  var seed = this.seed;
+  // Robert Jenkins' 32 bit integer hash function.
+  seed = ((seed + 0x7ed55d16) + (seed << 12)) & 0xffffffff;
+  seed = ((seed ^ 0xc761c23c) ^ (seed >>> 19)) & 0xffffffff;
+  seed = ((seed + 0x165667b1) + (seed << 5)) & 0xffffffff;
+  seed = ((seed + 0xd3a2646c) ^ (seed << 9)) & 0xffffffff;
+  seed = ((seed + 0xfd7046c5) + (seed << 3)) & 0xffffffff;
+  seed = ((seed ^ 0xb55a4f09) ^ (seed >>> 16)) & 0xffffffff;
+  this.seed = seed;
+  return (seed & 0xfffffff) / 0x10000000;
+}
+
+function next(maxValue) {
+  return Math.floor(this.nextDouble() * maxValue);
+}
+
+/*
+ * Creates iterator over array, which returns items of array in random order
+ * Time complexity is guaranteed to be O(n);
+ */
+function randomIterator(array, customRandom) {
+  var localRandom = customRandom || random();
+  if (typeof localRandom.next !== 'function') {
+    throw new Error('customRandom does not match expected API: next() function is missing');
+  }
+
+  return {
+    forEach: forEach,
+
+    /**
+     * Shuffles array randomly, in place.
+     */
+    shuffle: shuffle
+  };
+
+  function shuffle() {
+    var i, j, t;
+    for (i = array.length - 1; i > 0; --i) {
+      j = localRandom.next(i + 1); // i inclusive
+      t = array[j];
+      array[j] = array[i];
+      array[i] = t;
+    }
+
+    return array;
+  }
+
+  function forEach(callback) {
+    var i, j, t;
+    for (i = array.length - 1; i > 0; --i) {
+      j = localRandom.next(i + 1); // i inclusive
+      t = array[j];
+      array[j] = array[i];
+      array[i] = t;
+
+      callback(t);
+    }
+
+    if (array.length) {
+      callback(array[0]);
+    }
+  }
+}
+},{}],22:[function(require,module,exports){
 module.exports = merge;
 
 /**
@@ -1872,7 +2304,7 @@ function merge(target, options) {
   return target;
 }
 
-},{}],18:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 module.exports = {
   Body: Body,
   Vector2d: Vector2d,
@@ -1939,7 +2371,7 @@ Vector3d.prototype.reset = function () {
   this.x = this.y = this.z = 0;
 };
 
-},{}],19:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /**
  * Manages a simulation of physical forces acting on bodies and springs.
  */
@@ -1949,6 +2381,7 @@ function physicsSimulator(settings) {
   var Spring = require('./lib/spring');
   var expose = require('ngraph.expose');
   var merge = require('ngraph.merge');
+  var eventify = require('ngraph.events');
 
   settings = merge(settings, {
       /**
@@ -1985,11 +2418,6 @@ function physicsSimulator(settings) {
        * Default time step (dt) for forces integration
        */
       timeStep : 20,
-
-      /**
-        * Maximum movement of the system which can be considered as stabilized
-        */
-      stableThreshold: 0.009
   });
 
   // We allow clients to override basic factory methods:
@@ -2007,6 +2435,9 @@ function physicsSimulator(settings) {
       springForce = createSpringForce(settings),
       dragForce = createDragForce(settings);
 
+  var bboxNeedsUpdate = true;
+  var totalMovement = 0; // how much movement we made on last step
+
   var publicApi = {
     /**
      * Array of bodies, registered with current simulator
@@ -2015,6 +2446,8 @@ function physicsSimulator(settings) {
      * exposed for testing/performance purposes.
      */
     bodies: bodies,
+
+    quadTree: quadTree,
 
     /**
      * Array of springs, registered with current simulator
@@ -2036,11 +2469,11 @@ function physicsSimulator(settings) {
      */
     step: function () {
       accumulateForces();
-      var totalMovement = integrate(bodies, settings.timeStep);
 
+      var movement = integrate(bodies, settings.timeStep);
       bounds.update();
 
-      return totalMovement < settings.stableThreshold;
+      return movement;
     },
 
     /**
@@ -2119,6 +2552,13 @@ function physicsSimulator(settings) {
     },
 
     /**
+     * Returns amount of movement performed on last step() call
+     */
+    getTotalMovement: function () {
+      return totalMovement;
+    },
+
+    /**
      * Removes spring from the system
      *
      * @param {Object} spring to remove. Spring is an object returned by addSpring
@@ -2142,7 +2582,15 @@ function physicsSimulator(settings) {
      * Returns bounding box which covers all bodies
      */
     getBBox: function () {
+      if (bboxNeedsUpdate) {
+        bounds.update();
+        bboxNeedsUpdate = false;
+      }
       return bounds.box;
+    },
+
+    invalidateBBox: function () {
+      bboxNeedsUpdate = true;
     },
 
     gravity: function (value) {
@@ -2168,6 +2616,8 @@ function physicsSimulator(settings) {
 
   // allow settings modification via public API:
   expose(settings, publicApi);
+
+  eventify(publicApi);
 
   return publicApi;
 
@@ -2199,7 +2649,7 @@ function physicsSimulator(settings) {
   }
 };
 
-},{"./lib/bounds":20,"./lib/createBody":21,"./lib/dragForce":22,"./lib/eulerIntegrator":23,"./lib/spring":24,"./lib/springForce":25,"ngraph.expose":11,"ngraph.merge":17,"ngraph.quadtreebh":26}],20:[function(require,module,exports){
+},{"./lib/bounds":25,"./lib/createBody":26,"./lib/dragForce":27,"./lib/eulerIntegrator":28,"./lib/spring":29,"./lib/springForce":30,"ngraph.events":31,"ngraph.expose":12,"ngraph.merge":22,"ngraph.quadtreebh":32}],25:[function(require,module,exports){
 module.exports = function (bodies, settings) {
   var random = require('ngraph.random').random(42);
   var boundingBox =  { x1: 0, y1: 0, x2: 0, y2: 0 };
@@ -2281,14 +2731,14 @@ module.exports = function (bodies, settings) {
   }
 }
 
-},{"ngraph.random":30}],21:[function(require,module,exports){
+},{"ngraph.random":36}],26:[function(require,module,exports){
 var physics = require('ngraph.physics.primitives');
 
 module.exports = function(pos) {
   return new physics.Body(pos);
 }
 
-},{"ngraph.physics.primitives":18}],22:[function(require,module,exports){
+},{"ngraph.physics.primitives":23}],27:[function(require,module,exports){
 /**
  * Represents drag force, which reduces force value on each step by given
  * coefficient.
@@ -2317,7 +2767,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":11,"ngraph.merge":17}],23:[function(require,module,exports){
+},{"ngraph.expose":12,"ngraph.merge":22}],28:[function(require,module,exports){
 /**
  * Performs forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -2332,6 +2782,10 @@ function integrate(bodies, timeStep) {
       dy = 0, ty = 0,
       i,
       max = bodies.length;
+
+  if (max === 0) {
+    return 0;
+  }
 
   for (i = 0; i < max; ++i) {
     var body = bodies[i],
@@ -2357,10 +2811,10 @@ function integrate(bodies, timeStep) {
     tx += Math.abs(dx); ty += Math.abs(dy);
   }
 
-  return (tx * tx + ty * ty)/bodies.length;
+  return (tx * tx + ty * ty)/max;
 }
 
-},{}],24:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 module.exports = Spring;
 
 /**
@@ -2376,7 +2830,7 @@ function Spring(fromBody, toBody, length, coeff, weight) {
     this.weight = typeof weight === 'number' ? weight : 1;
 };
 
-},{}],25:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 /**
  * Represents spring force, which updates forces acting on two bodies, conntected
  * by a spring.
@@ -2428,7 +2882,9 @@ module.exports = function (options) {
   return api;
 }
 
-},{"ngraph.expose":11,"ngraph.merge":17,"ngraph.random":30}],26:[function(require,module,exports){
+},{"ngraph.expose":12,"ngraph.merge":22,"ngraph.random":36}],31:[function(require,module,exports){
+arguments[4][14][0].apply(exports,arguments)
+},{"dup":14}],32:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm for 2d case. Implementation
  * is highly optimized (avoids recusion and gc pressure)
@@ -2454,270 +2910,16 @@ module.exports = function(options) {
 
     nodesCache = [],
     currentInCache = 0,
-    newNode = function() {
-      // To avoid pressure on GC we reuse nodes.
-      var node = nodesCache[currentInCache];
-      if (node) {
-        node.quad0 = null;
-        node.quad1 = null;
-        node.quad2 = null;
-        node.quad3 = null;
-        node.body = null;
-        node.mass = node.massX = node.massY = 0;
-        node.left = node.right = node.top = node.bottom = 0;
-      } else {
-        node = new Node();
-        nodesCache[currentInCache] = node;
-      }
-
-      ++currentInCache;
-      return node;
-    },
-
-    root = newNode(),
-
-    // Inserts body to the tree
-    insert = function(newBody) {
-      insertStack.reset();
-      insertStack.push(root, newBody);
-
-      while (!insertStack.isEmpty()) {
-        var stackItem = insertStack.pop(),
-          node = stackItem.node,
-          body = stackItem.body;
-
-        if (!node.body) {
-          // This is internal node. Update the total mass of the node and center-of-mass.
-          var x = body.pos.x;
-          var y = body.pos.y;
-          node.mass = node.mass + body.mass;
-          node.massX = node.massX + body.mass * x;
-          node.massY = node.massY + body.mass * y;
-
-          // Recursively insert the body in the appropriate quadrant.
-          // But first find the appropriate quadrant.
-          var quadIdx = 0, // Assume we are in the 0's quad.
-            left = node.left,
-            right = (node.right + left) / 2,
-            top = node.top,
-            bottom = (node.bottom + top) / 2;
-
-          if (x > right) { // somewhere in the eastern part.
-            quadIdx = quadIdx + 1;
-            var oldLeft = left;
-            left = right;
-            right = right + (right - oldLeft);
-          }
-          if (y > bottom) { // and in south.
-            quadIdx = quadIdx + 2;
-            var oldTop = top;
-            top = bottom;
-            bottom = bottom + (bottom - oldTop);
-          }
-
-          var child = getChild(node, quadIdx);
-          if (!child) {
-            // The node is internal but this quadrant is not taken. Add
-            // subnode to it.
-            child = newNode();
-            child.left = left;
-            child.top = top;
-            child.right = right;
-            child.bottom = bottom;
-            child.body = body;
-
-            setChild(node, quadIdx, child);
-          } else {
-            // continue searching in this quadrant.
-            insertStack.push(child, body);
-          }
-        } else {
-          // We are trying to add to the leaf node.
-          // We have to convert current leaf into internal node
-          // and continue adding two nodes.
-          var oldBody = node.body;
-          node.body = null; // internal nodes do not cary bodies
-
-          if (isSamePosition(oldBody.pos, body.pos)) {
-            // Prevent infinite subdivision by bumping one node
-            // anywhere in this quadrant
-            var retriesCount = 3;
-            do {
-              var offset = random.nextDouble();
-              var dx = (node.right - node.left) * offset;
-              var dy = (node.bottom - node.top) * offset;
-
-              oldBody.pos.x = node.left + dx;
-              oldBody.pos.y = node.top + dy;
-              retriesCount -= 1;
-              // Make sure we don't bump it out of the box. If we do, next iteration should fix it
-            } while (retriesCount > 0 && isSamePosition(oldBody.pos, body.pos));
-
-            if (retriesCount === 0 && isSamePosition(oldBody.pos, body.pos)) {
-              // This is very bad, we ran out of precision.
-              // if we do not return from the method we'll get into
-              // infinite loop here. So we sacrifice correctness of layout, and keep the app running
-              // Next layout iteration should get larger bounding box in the first step and fix this
-              return;
-            }
-          }
-          // Next iteration should subdivide node further.
-          insertStack.push(node, oldBody);
-          insertStack.push(node, body);
-        }
-      }
-    },
-
-    update = function(sourceBody) {
-      var queue = updateQueue,
-        v,
-        dx,
-        dy,
-        r, fx = 0,
-        fy = 0,
-        queueLength = 1,
-        shiftIdx = 0,
-        pushIdx = 1;
-
-      queue[0] = root;
-
-      while (queueLength) {
-        var node = queue[shiftIdx],
-          body = node.body;
-
-        queueLength -= 1;
-        shiftIdx += 1;
-        var differentBody = (body !== sourceBody);
-        if (body && differentBody) {
-          // If the current node is a leaf node (and it is not source body),
-          // calculate the force exerted by the current node on body, and add this
-          // amount to body's net force.
-          dx = body.pos.x - sourceBody.pos.x;
-          dy = body.pos.y - sourceBody.pos.y;
-          r = Math.sqrt(dx * dx + dy * dy);
-
-          if (r === 0) {
-            // Poor man's protection against zero distance.
-            dx = (random.nextDouble() - 0.5) / 50;
-            dy = (random.nextDouble() - 0.5) / 50;
-            r = Math.sqrt(dx * dx + dy * dy);
-          }
-
-          // This is standard gravition force calculation but we divide
-          // by r^3 to save two operations when normalizing force vector.
-          v = gravity * body.mass * sourceBody.mass / (r * r * r);
-          fx += v * dx;
-          fy += v * dy;
-        } else if (differentBody) {
-          // Otherwise, calculate the ratio s / r,  where s is the width of the region
-          // represented by the internal node, and r is the distance between the body
-          // and the node's center-of-mass
-          dx = node.massX / node.mass - sourceBody.pos.x;
-          dy = node.massY / node.mass - sourceBody.pos.y;
-          r = Math.sqrt(dx * dx + dy * dy);
-
-          if (r === 0) {
-            // Sorry about code duplucation. I don't want to create many functions
-            // right away. Just want to see performance first.
-            dx = (random.nextDouble() - 0.5) / 50;
-            dy = (random.nextDouble() - 0.5) / 50;
-            r = Math.sqrt(dx * dx + dy * dy);
-          }
-          // If s / r < θ, treat this internal node as a single body, and calculate the
-          // force it exerts on sourceBody, and add this amount to sourceBody's net force.
-          if ((node.right - node.left) / r < theta) {
-            // in the if statement above we consider node's width only
-            // because the region was squarified during tree creation.
-            // Thus there is no difference between using width or height.
-            v = gravity * node.mass * sourceBody.mass / (r * r * r);
-            fx += v * dx;
-            fy += v * dy;
-          } else {
-            // Otherwise, run the procedure recursively on each of the current node's children.
-
-            // I intentionally unfolded this loop, to save several CPU cycles.
-            if (node.quad0) {
-              queue[pushIdx] = node.quad0;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad1) {
-              queue[pushIdx] = node.quad1;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad2) {
-              queue[pushIdx] = node.quad2;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad3) {
-              queue[pushIdx] = node.quad3;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-          }
-        }
-      }
-
-      sourceBody.force.x += fx;
-      sourceBody.force.y += fy;
-    },
-
-    insertBodies = function(bodies) {
-      var x1 = Number.MAX_VALUE,
-        y1 = Number.MAX_VALUE,
-        x2 = Number.MIN_VALUE,
-        y2 = Number.MIN_VALUE,
-        i,
-        max = bodies.length;
-
-      // To reduce quad tree depth we are looking for exact bounding box of all particles.
-      i = max;
-      while (i--) {
-        var x = bodies[i].pos.x;
-        var y = bodies[i].pos.y;
-        if (x < x1) {
-          x1 = x;
-        }
-        if (x > x2) {
-          x2 = x;
-        }
-        if (y < y1) {
-          y1 = y;
-        }
-        if (y > y2) {
-          y2 = y;
-        }
-      }
-
-      // Squarify the bounds.
-      var dx = x2 - x1,
-        dy = y2 - y1;
-      if (dx > dy) {
-        y2 = y1 + dx;
-      } else {
-        x2 = x1 + dy;
-      }
-
-      currentInCache = 0;
-      root = newNode();
-      root.left = x1;
-      root.right = x2;
-      root.top = y1;
-      root.bottom = y2;
-
-      i = max - 1;
-      if (i > 0) {
-        root.body = bodies[i];
-      }
-      while (i--) {
-        insert(bodies[i], root);
-      }
-    };
+    root = newNode();
 
   return {
     insertBodies: insertBodies,
+    /**
+     * Gets root node if its present
+     */
+    getRoot: function() {
+      return root;
+    },
     updateBodyForce: update,
     options: function(newOptions) {
       if (newOptions) {
@@ -2737,6 +2939,263 @@ module.exports = function(options) {
       };
     }
   };
+
+  function newNode() {
+    // To avoid pressure on GC we reuse nodes.
+    var node = nodesCache[currentInCache];
+    if (node) {
+      node.quad0 = null;
+      node.quad1 = null;
+      node.quad2 = null;
+      node.quad3 = null;
+      node.body = null;
+      node.mass = node.massX = node.massY = 0;
+      node.left = node.right = node.top = node.bottom = 0;
+    } else {
+      node = new Node();
+      nodesCache[currentInCache] = node;
+    }
+
+    ++currentInCache;
+    return node;
+  }
+
+  function update(sourceBody) {
+    var queue = updateQueue,
+      v,
+      dx,
+      dy,
+      r, fx = 0,
+      fy = 0,
+      queueLength = 1,
+      shiftIdx = 0,
+      pushIdx = 1;
+
+    queue[0] = root;
+
+    while (queueLength) {
+      var node = queue[shiftIdx],
+        body = node.body;
+
+      queueLength -= 1;
+      shiftIdx += 1;
+      var differentBody = (body !== sourceBody);
+      if (body && differentBody) {
+        // If the current node is a leaf node (and it is not source body),
+        // calculate the force exerted by the current node on body, and add this
+        // amount to body's net force.
+        dx = body.pos.x - sourceBody.pos.x;
+        dy = body.pos.y - sourceBody.pos.y;
+        r = Math.sqrt(dx * dx + dy * dy);
+
+        if (r === 0) {
+          // Poor man's protection against zero distance.
+          dx = (random.nextDouble() - 0.5) / 50;
+          dy = (random.nextDouble() - 0.5) / 50;
+          r = Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // This is standard gravition force calculation but we divide
+        // by r^3 to save two operations when normalizing force vector.
+        v = gravity * body.mass * sourceBody.mass / (r * r * r);
+        fx += v * dx;
+        fy += v * dy;
+      } else if (differentBody) {
+        // Otherwise, calculate the ratio s / r,  where s is the width of the region
+        // represented by the internal node, and r is the distance between the body
+        // and the node's center-of-mass
+        dx = node.massX / node.mass - sourceBody.pos.x;
+        dy = node.massY / node.mass - sourceBody.pos.y;
+        r = Math.sqrt(dx * dx + dy * dy);
+
+        if (r === 0) {
+          // Sorry about code duplucation. I don't want to create many functions
+          // right away. Just want to see performance first.
+          dx = (random.nextDouble() - 0.5) / 50;
+          dy = (random.nextDouble() - 0.5) / 50;
+          r = Math.sqrt(dx * dx + dy * dy);
+        }
+        // If s / r < θ, treat this internal node as a single body, and calculate the
+        // force it exerts on sourceBody, and add this amount to sourceBody's net force.
+        if ((node.right - node.left) / r < theta) {
+          // in the if statement above we consider node's width only
+          // because the region was squarified during tree creation.
+          // Thus there is no difference between using width or height.
+          v = gravity * node.mass * sourceBody.mass / (r * r * r);
+          fx += v * dx;
+          fy += v * dy;
+        } else {
+          // Otherwise, run the procedure recursively on each of the current node's children.
+
+          // I intentionally unfolded this loop, to save several CPU cycles.
+          if (node.quad0) {
+            queue[pushIdx] = node.quad0;
+            queueLength += 1;
+            pushIdx += 1;
+          }
+          if (node.quad1) {
+            queue[pushIdx] = node.quad1;
+            queueLength += 1;
+            pushIdx += 1;
+          }
+          if (node.quad2) {
+            queue[pushIdx] = node.quad2;
+            queueLength += 1;
+            pushIdx += 1;
+          }
+          if (node.quad3) {
+            queue[pushIdx] = node.quad3;
+            queueLength += 1;
+            pushIdx += 1;
+          }
+        }
+      }
+    }
+
+    sourceBody.force.x += fx;
+    sourceBody.force.y += fy;
+  }
+
+  function insertBodies(bodies) {
+    var x1 = Number.MAX_VALUE,
+      y1 = Number.MAX_VALUE,
+      x2 = Number.MIN_VALUE,
+      y2 = Number.MIN_VALUE,
+      i,
+      max = bodies.length;
+
+    // To reduce quad tree depth we are looking for exact bounding box of all particles.
+    i = max;
+    while (i--) {
+      var x = bodies[i].pos.x;
+      var y = bodies[i].pos.y;
+      if (x < x1) {
+        x1 = x;
+      }
+      if (x > x2) {
+        x2 = x;
+      }
+      if (y < y1) {
+        y1 = y;
+      }
+      if (y > y2) {
+        y2 = y;
+      }
+    }
+
+    // Squarify the bounds.
+    var dx = x2 - x1,
+      dy = y2 - y1;
+    if (dx > dy) {
+      y2 = y1 + dx;
+    } else {
+      x2 = x1 + dy;
+    }
+
+    currentInCache = 0;
+    root = newNode();
+    root.left = x1;
+    root.right = x2;
+    root.top = y1;
+    root.bottom = y2;
+
+    i = max - 1;
+    if (i >= 0) {
+      root.body = bodies[i];
+    }
+    while (i--) {
+      insert(bodies[i], root);
+    }
+  }
+
+  function insert(newBody) {
+    insertStack.reset();
+    insertStack.push(root, newBody);
+
+    while (!insertStack.isEmpty()) {
+      var stackItem = insertStack.pop(),
+        node = stackItem.node,
+        body = stackItem.body;
+
+      if (!node.body) {
+        // This is internal node. Update the total mass of the node and center-of-mass.
+        var x = body.pos.x;
+        var y = body.pos.y;
+        node.mass = node.mass + body.mass;
+        node.massX = node.massX + body.mass * x;
+        node.massY = node.massY + body.mass * y;
+
+        // Recursively insert the body in the appropriate quadrant.
+        // But first find the appropriate quadrant.
+        var quadIdx = 0, // Assume we are in the 0's quad.
+          left = node.left,
+          right = (node.right + left) / 2,
+          top = node.top,
+          bottom = (node.bottom + top) / 2;
+
+        if (x > right) { // somewhere in the eastern part.
+          quadIdx = quadIdx + 1;
+          left = right;
+          right = node.right;
+        }
+        if (y > bottom) { // and in south.
+          quadIdx = quadIdx + 2;
+          top = bottom;
+          bottom = node.bottom;
+        }
+
+        var child = getChild(node, quadIdx);
+        if (!child) {
+          // The node is internal but this quadrant is not taken. Add
+          // subnode to it.
+          child = newNode();
+          child.left = left;
+          child.top = top;
+          child.right = right;
+          child.bottom = bottom;
+          child.body = body;
+
+          setChild(node, quadIdx, child);
+        } else {
+          // continue searching in this quadrant.
+          insertStack.push(child, body);
+        }
+      } else {
+        // We are trying to add to the leaf node.
+        // We have to convert current leaf into internal node
+        // and continue adding two nodes.
+        var oldBody = node.body;
+        node.body = null; // internal nodes do not cary bodies
+
+        if (isSamePosition(oldBody.pos, body.pos)) {
+          // Prevent infinite subdivision by bumping one node
+          // anywhere in this quadrant
+          var retriesCount = 3;
+          do {
+            var offset = random.nextDouble();
+            var dx = (node.right - node.left) * offset;
+            var dy = (node.bottom - node.top) * offset;
+
+            oldBody.pos.x = node.left + dx;
+            oldBody.pos.y = node.top + dy;
+            retriesCount -= 1;
+            // Make sure we don't bump it out of the box. If we do, next iteration should fix it
+          } while (retriesCount > 0 && isSamePosition(oldBody.pos, body.pos));
+
+          if (retriesCount === 0 && isSamePosition(oldBody.pos, body.pos)) {
+            // This is very bad, we ran out of precision.
+            // if we do not return from the method we'll get into
+            // infinite loop here. So we sacrifice correctness of layout, and keep the app running
+            // Next layout iteration should get larger bounding box in the first step and fix this
+            return;
+          }
+        }
+        // Next iteration should subdivide node further.
+        insertStack.push(node, oldBody);
+        insertStack.push(node, body);
+      }
+    }
+  }
 };
 
 function getChild(node, idx) {
@@ -2754,7 +3213,7 @@ function setChild(node, idx, child) {
   else if (idx === 3) node.quad3 = child;
 }
 
-},{"./insertStack":27,"./isSamePosition":28,"./node":29,"ngraph.random":30}],27:[function(require,module,exports){
+},{"./insertStack":33,"./isSamePosition":34,"./node":35,"ngraph.random":36}],33:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -2798,7 +3257,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],28:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
     var dx = Math.abs(point1.x - point2.x);
     var dy = Math.abs(point1.y - point2.y);
@@ -2806,7 +3265,7 @@ module.exports = function isSamePosition(point1, point2) {
     return (dx < 1e-8 && dy < 1e-8);
 };
 
-},{}],29:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /**
  * Internal data structure to represent 2D QuadTree node
  */
@@ -2838,7 +3297,7 @@ module.exports = function Node() {
   this.right = 0;
 };
 
-},{}],30:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 module.exports = {
   random: random,
   randomIterator: randomIterator
@@ -2925,7 +3384,7 @@ function randomIterator(array, customRandom) {
     };
 }
 
-},{}],31:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 module.exports = save;
 
 function save(graph, customNodeTransform, customLinkTransform) {
@@ -2981,7 +3440,7 @@ function save(graph, customNodeTransform, customLinkTransform) {
   }
 }
 
-},{}],32:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 module.exports = svg;
 
 svg.compile = require('./lib/compile');
@@ -3094,7 +3553,7 @@ function augment(element) {
   }
 }
 
-},{"./lib/compile":33,"./lib/compile_template":34,"add-event-listener":4}],33:[function(require,module,exports){
+},{"./lib/compile":39,"./lib/compile_template":40,"add-event-listener":4}],39:[function(require,module,exports){
 var parser = require('./domparser.js');
 var svg = require('../');
 
@@ -3122,7 +3581,7 @@ function addNamespaces(text) {
   }
 }
 
-},{"../":32,"./domparser.js":35}],34:[function(require,module,exports){
+},{"../":38,"./domparser.js":41}],40:[function(require,module,exports){
 module.exports = template;
 
 var BINDING_EXPR = /{{(.+?)}}/;
@@ -3216,7 +3675,7 @@ function bindTextContent(element, allBindings) {
   }
 }
 
-},{}],35:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 module.exports = createDomparser();
 
 function createDomparser() {
@@ -3232,9 +3691,11 @@ function fail() {
   throw new Error('DOMParser is not supported by this platform. Please open issue here https://github.com/anvaka/simplesvg');
 }
 
-},{}],36:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 arguments[4][14][0].apply(exports,arguments)
-},{"dup":14,"ngraph.events":10}],37:[function(require,module,exports){
+},{"dup":14}],43:[function(require,module,exports){
+arguments[4][17][0].apply(exports,arguments)
+},{"dup":17,"ngraph.events":42}],44:[function(require,module,exports){
 var centrality = require('ngraph.centrality');
 
 module.exports = centralityWrapper;
@@ -3272,7 +3733,7 @@ function toVivaGraphCentralityFormat(centrality) {
   }
 }
 
-},{"ngraph.centrality":6}],38:[function(require,module,exports){
+},{"ngraph.centrality":6}],45:[function(require,module,exports){
 /**
  * @fileOverview Contains collection of primitive operations under graph.
  *
@@ -3307,7 +3768,7 @@ function operations() {
     };
 };
 
-},{}],39:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 /**
  * @author Andrei Kashcha (aka anvaka) / https://github.com/anvaka
  */
@@ -3356,7 +3817,7 @@ function domInputManager(graph, graphics) {
   }
 }
 
-},{"./dragndrop.js":40}],40:[function(require,module,exports){
+},{"./dragndrop.js":47}],47:[function(require,module,exports){
 /**
  * @author Andrei Kashcha (aka anvaka) / https://github.com/anvaka
  */
@@ -3639,7 +4100,7 @@ function dragndrop(element) {
     };
 }
 
-},{"../Utils/browserInfo.js":44,"../Utils/documentEvents.js":45,"../Utils/findElementPosition.js":46}],41:[function(require,module,exports){
+},{"../Utils/browserInfo.js":51,"../Utils/documentEvents.js":52,"../Utils/findElementPosition.js":53}],48:[function(require,module,exports){
 /**
  * @author Andrei Kashcha (aka anvaka) / https://github.com/anvaka
  */
@@ -3710,7 +4171,7 @@ function webglInputManager(graph, graphics) {
     };
 }
 
-},{"../WebGL/webglInputEvents.js":62}],42:[function(require,module,exports){
+},{"../WebGL/webglInputEvents.js":69}],49:[function(require,module,exports){
 module.exports = constant;
 
 var merge = require('ngraph.merge');
@@ -3909,7 +4370,7 @@ function constant(graph, userSettings) {
     }
 }
 
-},{"../Utils/rect.js":50,"ngraph.merge":17,"ngraph.random":30}],43:[function(require,module,exports){
+},{"../Utils/rect.js":57,"ngraph.merge":22,"ngraph.random":36}],50:[function(require,module,exports){
 /**
  * This module provides compatibility layer with 0.6.x library. It will be
  * removed in the next version
@@ -3954,7 +4415,7 @@ function backwardCompatibleEvents(g) {
   }
 }
 
-},{"ngraph.events":10}],44:[function(require,module,exports){
+},{"ngraph.events":42}],51:[function(require,module,exports){
 module.exports = browserInfo();
 
 function browserInfo() {
@@ -3983,7 +4444,7 @@ function browserInfo() {
   };
 }
 
-},{}],45:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 var nullEvents = require('./nullEvents.js');
 
 module.exports = createDocumentEvents();
@@ -4007,7 +4468,7 @@ function off(eventName, handler) {
   document.removeEventListener(eventName, handler);
 }
 
-},{"./nullEvents.js":49}],46:[function(require,module,exports){
+},{"./nullEvents.js":56}],53:[function(require,module,exports){
 /**
  * Finds the absolute position of an element on a page
  */
@@ -4026,7 +4487,7 @@ function findElementPosition(obj) {
     return [curleft, curtop];
 }
 
-},{}],47:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 module.exports = getDimension;
 
 function getDimension(container) {
@@ -4048,7 +4509,7 @@ function getDimension(container) {
     };
 }
 
-},{}],48:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 var intersect = require('gintersect');
 
 module.exports = intersectRect;
@@ -4060,7 +4521,7 @@ function intersectRect(left, top, right, bottom, x1, y1, x2, y2) {
     intersect(right, top, left, top, x1, y1, x2, y2);
 }
 
-},{"gintersect":5}],49:[function(require,module,exports){
+},{"gintersect":5}],56:[function(require,module,exports){
 module.exports = createNullEvents();
 
 function createNullEvents() {
@@ -4073,7 +4534,7 @@ function createNullEvents() {
 
 function noop() { }
 
-},{}],50:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 module.exports = Rect;
 
 /**
@@ -4086,10 +4547,10 @@ function Rect (x1, y1, x2, y2) {
     this.y2 = y2 || 0;
 }
 
-},{}],51:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 (function (global){
 /**
- * @author Andrei Kashcha (aka anvaka) / http://anvaka.blogspot.com
+ * @author Andrei Kashcha (aka anvaka) / https://github.com/anvaka
  */
 
 module.exports = createTimer();
@@ -4182,13 +4643,13 @@ function createTimer() {
 function noop() {}
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],52:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 var nullEvents = require('./nullEvents.js');
 
 module.exports = createDocumentEvents();
 
 function createDocumentEvents() {
-  if (typeof window === undefined) {
+  if (typeof window === 'undefined') {
     return nullEvents;
   }
 
@@ -4207,7 +4668,7 @@ function off(eventName, handler) {
 }
 
 
-},{"./nullEvents.js":49}],53:[function(require,module,exports){
+},{"./nullEvents.js":56}],60:[function(require,module,exports){
 /**
  * @fileOverview Defines a graph renderer that uses CSS based drawings.
  *
@@ -4248,7 +4709,7 @@ var dragndrop = require('../Input/dragndrop.js');
  *
  *     // Layout algorithm to be used. The algorithm is expected to comply with defined
  *     // interface and is expected to be iterative. Renderer will use it then to calculate
- *     // grpaph's layout. For examples of the interface refer to Viva.Graph.Layout.forceDirected()
+ *     // graph's layout. For examples of the interface refer to Viva.Graph.Layout.forceDirected()
  *     layout : Viva.Graph.Layout.forceDirected(),
  *
  *     // Directs renderer to display links. Usually rendering links is the slowest part of this
@@ -4277,8 +4738,6 @@ function renderer(graph, settings) {
     rendererInitialized = false,
     updateCenterRequired = true,
 
-    currentStep = 0,
-    totalIterationsCount = 0,
     isStable = false,
     userInteraction = false,
     isPaused = false,
@@ -4297,7 +4756,7 @@ function renderer(graph, settings) {
      * Performs rendering of the graph.
      *
      * @param iterationsCount if specified renderer will run only given number of iterations
-     * and then stop. Otherwise graph rendering is performed infinitely.
+     * and then stop. Otherwise graph rendering is performed indefinitely.
      *
      * Note: if rendering stopped by used started dragging nodes or new nodes were added to the
      * graph renderer will give run more iterations to reflect changes.
@@ -4350,6 +4809,13 @@ function renderer(graph, settings) {
     },
 
     /**
+     * Returns current transformation matrix.
+     */
+    getTransform: function() {
+      return transform;
+    },
+
+    /**
      * Centers renderer at x,y graph's coordinates
      */
     moveTo: function(x, y) {
@@ -4362,6 +4828,13 @@ function renderer(graph, settings) {
      */
     getGraphics: function() {
       return graphics;
+    },
+    
+    /**
+     * Gets current layout.
+     */
+    getLayout: function() {
+      return layout;
     },
 
     /**
@@ -4432,19 +4905,20 @@ function renderer(graph, settings) {
 
   function renderIterations(iterationsCount) {
     if (animationTimer) {
-      totalIterationsCount += iterationsCount;
       return;
     }
 
-    if (iterationsCount) {
-      totalIterationsCount += iterationsCount;
-
+    if (iterationsCount !== undefined) {
       animationTimer = timer(function() {
+        iterationsCount -= 1;
+        if (iterationsCount < 0) {
+          var needMoreFrames = false;
+          return needMoreFrames;
+        }
+
         return onRenderFrame();
       }, FRAME_INTERVAL);
     } else {
-      currentStep = 0;
-      totalIterationsCount = 0;
       animationTimer = timer(onRenderFrame, FRAME_INTERVAL);
     }
   }
@@ -4645,6 +5119,7 @@ function renderer(graph, settings) {
         graphics.translateRel(offset.x, offset.y);
 
         renderGraph();
+        publicEvents.fire('drag', offset);
       });
     }
 
@@ -4687,11 +5162,11 @@ function renderer(graph, settings) {
   }
 }
 
-},{"../Input/domInputManager.js":39,"../Input/dragndrop.js":40,"../Utils/getDimensions.js":47,"../Utils/timer.js":51,"../Utils/windowEvents.js":52,"./svgGraphics.js":54,"ngraph.events":10,"ngraph.forcelayout":12}],54:[function(require,module,exports){
+},{"../Input/domInputManager.js":46,"../Input/dragndrop.js":47,"../Utils/getDimensions.js":54,"../Utils/timer.js":58,"../Utils/windowEvents.js":59,"./svgGraphics.js":61,"ngraph.events":42,"ngraph.forcelayout":13}],61:[function(require,module,exports){
 /**
  * @fileOverview Defines a graph renderer that uses SVG based drawings.
  *
- * @author Andrei Kashcha (aka anvaka) / http://anvaka.blogspot.com
+ * @author Andrei Kashcha (aka anvaka) / https://github.com/anvaka
  */
 
 module.exports = svgGraphics;
@@ -5045,7 +5520,7 @@ function svgGraphics() {
     }
 }
 
-},{"../Input/domInputManager.js":39,"ngraph.events":10,"simplesvg":32}],55:[function(require,module,exports){
+},{"../Input/domInputManager.js":46,"ngraph.events":42,"simplesvg":38}],62:[function(require,module,exports){
 /**
  * @fileOverview Defines a graph renderer that uses WebGL based drawings.
  *
@@ -5339,6 +5814,12 @@ function webglGraphics(options) {
         },
 
        /**
+        * Resizes the graphic without resetting the scale. 
+        * Useful with viva graph in a dynamic container
+        */
+        updateSize: updateSize,
+
+       /**
         * Called by Viva.Graph.View.renderer to let concrete graphic output
         * provider prepare to render.
         */
@@ -5627,7 +6108,7 @@ function webglGraphics(options) {
     return graphics;
 }
 
-},{"../Input/webglInputManager.js":41,"../WebGL/webglLine.js":63,"../WebGL/webglLinkProgram.js":64,"../WebGL/webglNodeProgram.js":65,"../WebGL/webglSquare.js":66,"ngraph.events":10,"ngraph.merge":17}],56:[function(require,module,exports){
+},{"../Input/webglInputManager.js":48,"../WebGL/webglLine.js":70,"../WebGL/webglLinkProgram.js":71,"../WebGL/webglNodeProgram.js":72,"../WebGL/webglSquare.js":73,"ngraph.events":42,"ngraph.merge":22}],63:[function(require,module,exports){
 module.exports = parseColor;
 
 function parseColor(color) {
@@ -5651,7 +6132,7 @@ function parseColor(color) {
   return parsedColor;
 }
 
-},{}],57:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 module.exports = Texture;
 
 /**
@@ -5664,11 +6145,11 @@ function Texture(size) {
   this.canvas.width = this.canvas.height = size;
 }
 
-},{}],58:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 /**
  * @fileOverview Utility functions for webgl rendering.
  *
- * @author Andrei Kashcha (aka anvaka) / http://anvaka.blogspot.com
+ * @author Andrei Kashcha (aka anvaka) / https://github.com/anvaka
  */
 
 module.exports = webgl;
@@ -5771,7 +6252,7 @@ function swapArrayPart(array, from, to, elementsCount) {
   }
 }
 
-},{}],59:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 var Texture = require('./texture.js');
 
 module.exports = webglAtlas;
@@ -5975,7 +6456,7 @@ function isPowerOf2(n) {
   return (n & (n - 1)) === 0;
 }
 
-},{"./texture.js":57}],60:[function(require,module,exports){
+},{"./texture.js":64}],67:[function(require,module,exports){
 module.exports = webglImage;
 
 /**
@@ -6007,12 +6488,12 @@ function webglImage(size, src) {
     };
 }
 
-},{}],61:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 /**
  * @fileOverview Defines an image nodes for webglGraphics class.
  * Shape of nodes is square.
  *
- * @author Andrei Kashcha (aka anvaka) / http://anvaka.blogspot.com
+ * @author Andrei Kashcha (aka anvaka) / https://github.com/anvaka
  */
 
 var WebglAtlas = require('./webglAtlas.js');
@@ -6022,13 +6503,16 @@ module.exports = webglImageNodeProgram;
 
 /**
  * Defines simple UI for nodes in webgl renderer. Each node is rendered as an image.
+ * 
+ * @param {number} tilesPerTexture
+ * 
  */
-function webglImageNodeProgram() {
+function webglImageNodeProgram(tilesPerTexture) {
   // WebGL is gian state machine, we store some properties of the state here:
   var ATTRIBUTES_PER_PRIMITIVE = 18;
   var nodesFS = createNodeFragmentShader();
   var nodesVS = createNodeVertexShader();
-  var tilesPerTexture = 1024; // TODO: Get based on max texture size
+  var tilesPerTexture = tilesPerTexture || 1024; // TODO: Get based on max texture size
   var atlas;
   var program;
   var gl;
@@ -6120,27 +6604,27 @@ function webglImageNodeProgram() {
   function position(nodeUI, pos) {
     var idx = nodeUI.id * ATTRIBUTES_PER_PRIMITIVE;
     nodes[idx] = pos.x - nodeUI.size;
-    nodes[idx + 1] = pos.y - nodeUI.size;
+    nodes[idx + 1] = -pos.y - nodeUI.size;
     nodes[idx + 2] = nodeUI._offset * 4;
 
     nodes[idx + 3] = pos.x + nodeUI.size;
-    nodes[idx + 4] = pos.y - nodeUI.size;
+    nodes[idx + 4] = -pos.y - nodeUI.size;
     nodes[idx + 5] = nodeUI._offset * 4 + 1;
 
     nodes[idx + 6] = pos.x - nodeUI.size;
-    nodes[idx + 7] = pos.y + nodeUI.size;
+    nodes[idx + 7] = -pos.y + nodeUI.size;
     nodes[idx + 8] = nodeUI._offset * 4 + 2;
 
     nodes[idx + 9] = pos.x - nodeUI.size;
-    nodes[idx + 10] = pos.y + nodeUI.size;
+    nodes[idx + 10] = -pos.y + nodeUI.size;
     nodes[idx + 11] = nodeUI._offset * 4 + 2;
 
     nodes[idx + 12] = pos.x + nodeUI.size;
-    nodes[idx + 13] = pos.y - nodeUI.size;
+    nodes[idx + 13] = -pos.y - nodeUI.size;
     nodes[idx + 14] = nodeUI._offset * 4 + 1;
 
     nodes[idx + 15] = pos.x + nodeUI.size;
-    nodes[idx + 16] = pos.y + nodeUI.size;
+    nodes[idx + 16] = -pos.y + nodeUI.size;
     nodes[idx + 17] = nodeUI._offset * 4 + 3;
   }
 
@@ -6271,7 +6755,7 @@ function createNodeVertexShader() {
   ].join("\n");
 }
 
-},{"./webgl.js":58,"./webglAtlas.js":59}],62:[function(require,module,exports){
+},{"./webgl.js":65,"./webglAtlas.js":66}],69:[function(require,module,exports){
 var documentEvents = require('../Utils/documentEvents.js');
 
 module.exports = webglInputEvents;
@@ -6462,6 +6946,9 @@ function webglInputEvents(webglGraphics) {
         node = getNodeAtClientPos(pos);
 
         if (node && lastFound !== node) {
+          if(lastFound){ 
+            invoke(mouseLeaveCallback, [lastFound]);
+          }
           lastFound = node;
           cancelBubble = cancelBubble || invoke(mouseEnterCallback, [lastFound]);
         } else if (node === null && lastFound !== node) {
@@ -6510,11 +6997,13 @@ function webglInputEvents(webglGraphics) {
         pos.x = e.clientX - boundRect.left;
         pos.y = e.clientY - boundRect.top;
 
-        args = [getNodeAtClientPos(pos), e];
+        var nodeAtClientPos = getNodeAtClientPos(pos);
+        var sameNode = nodeAtClientPos === lastFound;
+        args = [nodeAtClientPos || lastFound, e];
         if (args[0]) {
           window.document.onselectstart = prevSelectStart;
 
-          if (clickTime - lastClickTime < 400 && args[0] === lastFound) {
+          if (clickTime - lastClickTime < 400 && sameNode) {
             invoke(dblClickCallback, args);
           } else {
             invoke(clickCallback, args);
@@ -6529,7 +7018,7 @@ function webglInputEvents(webglGraphics) {
   }
 }
 
-},{"../Utils/documentEvents.js":45}],63:[function(require,module,exports){
+},{"../Utils/documentEvents.js":52}],70:[function(require,module,exports){
 var parseColor = require('./parseColor.js');
 
 module.exports = webglLine;
@@ -6550,7 +7039,7 @@ function webglLine(color) {
   };
 }
 
-},{"./parseColor.js":56}],64:[function(require,module,exports){
+},{"./parseColor.js":63}],71:[function(require,module,exports){
 /**
  * @fileOverview Defines a naive form of links for webglGraphics class.
  * This form allows to change color of links.
@@ -6708,7 +7197,7 @@ function webglLinkProgram() {
     };
 }
 
-},{"./webgl.js":58}],65:[function(require,module,exports){
+},{"./webgl.js":65}],72:[function(require,module,exports){
 /**
  * @fileOverview Defines a naive form of nodes for webglGraphics class.
  * This form allows to change color of node. Shape of nodes is rectangular.
@@ -6873,7 +7362,7 @@ function webglNodeProgram() {
   }
 }
 
-},{"./webgl.js":58}],66:[function(require,module,exports){
+},{"./webgl.js":65}],73:[function(require,module,exports){
 var parseColor = require('./parseColor.js');
 
 module.exports = webglSquare;
@@ -6899,11 +7388,11 @@ function webglSquare(size, color) {
   };
 }
 
-},{"./parseColor.js":56}],67:[function(require,module,exports){
+},{"./parseColor.js":63}],74:[function(require,module,exports){
 // todo: this should be generated at build time.
-module.exports = '0.8.1';
+module.exports = '0.10.1';
 
-},{}],68:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 /**
  * This is an entry point for global namespace. If you want to use separate
  * modules individually - you are more than welcome to do so.
@@ -7017,4 +7506,4 @@ Viva.Graph = {
 
 module.exports = Viva;
 
-},{"./Algorithms/centrality.js":37,"./Algorithms/operations.js":38,"./Input/domInputManager.js":39,"./Input/dragndrop.js":40,"./Input/webglInputManager.js":41,"./Layout/constant.js":42,"./Utils/backwardCompatibleEvents.js":43,"./Utils/browserInfo.js":44,"./Utils/findElementPosition.js":46,"./Utils/getDimensions.js":47,"./Utils/intersectRect.js":48,"./Utils/rect.js":50,"./Utils/timer.js":51,"./View/renderer.js":53,"./View/svgGraphics.js":54,"./View/webglGraphics.js":55,"./WebGL/parseColor.js":56,"./WebGL/texture.js":57,"./WebGL/webgl.js":58,"./WebGL/webglAtlas.js":59,"./WebGL/webglImage.js":60,"./WebGL/webglImageNodeProgram.js":61,"./WebGL/webglInputEvents.js":62,"./WebGL/webglLine.js":63,"./WebGL/webglLinkProgram.js":64,"./WebGL/webglNodeProgram.js":65,"./WebGL/webglSquare.js":66,"./version.js":67,"gintersect":5,"ngraph.events":10,"ngraph.forcelayout":12,"ngraph.fromjson":13,"ngraph.generators":15,"ngraph.graph":36,"ngraph.merge":17,"ngraph.random":30,"ngraph.tojson":31,"simplesvg":32}]},{},[2]);
+},{"./Algorithms/centrality.js":44,"./Algorithms/operations.js":45,"./Input/domInputManager.js":46,"./Input/dragndrop.js":47,"./Input/webglInputManager.js":48,"./Layout/constant.js":49,"./Utils/backwardCompatibleEvents.js":50,"./Utils/browserInfo.js":51,"./Utils/findElementPosition.js":53,"./Utils/getDimensions.js":54,"./Utils/intersectRect.js":55,"./Utils/rect.js":57,"./Utils/timer.js":58,"./View/renderer.js":60,"./View/svgGraphics.js":61,"./View/webglGraphics.js":62,"./WebGL/parseColor.js":63,"./WebGL/texture.js":64,"./WebGL/webgl.js":65,"./WebGL/webglAtlas.js":66,"./WebGL/webglImage.js":67,"./WebGL/webglImageNodeProgram.js":68,"./WebGL/webglInputEvents.js":69,"./WebGL/webglLine.js":70,"./WebGL/webglLinkProgram.js":71,"./WebGL/webglNodeProgram.js":72,"./WebGL/webglSquare.js":73,"./version.js":74,"gintersect":5,"ngraph.events":42,"ngraph.forcelayout":13,"ngraph.fromjson":15,"ngraph.generators":18,"ngraph.graph":43,"ngraph.merge":22,"ngraph.random":36,"ngraph.tojson":37,"simplesvg":38}]},{},[2]);
