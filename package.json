@@ -1,6 +1,6 @@
 {
   "name": "ngraph.kruskal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A minimum-spanning-tree algorithm for ngraph.graph",
   "main": "index.js",
   "scripts": {
