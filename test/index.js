@@ -7,8 +7,8 @@ test('it can find spanning tree', function(t) {
   var graph = fromDot('digraph G { 1 -> 2 }');
   var tree = kruskal(graph);
   t.ok(tree.length === 1, 'Tree has one edge');
-  t.equals(tree[0].fromId, 1, 'it starts at 1');
-  t.equals(tree[0].toId, 2, 'and ends starts at 2');
+  t.equal(tree[0].fromId, 1, 'it starts at 1');
+  t.equal(tree[0].toId, 2, 'and ends starts at 2');
   t.end();
 });
 
@@ -25,11 +25,11 @@ test('it can use weights', function(t) {
     return link.data;
   });
   t.ok(tree.length === 2, 'Tree has one edge');
-  t.equals(tree[0].fromId, 1, 'it starts at 1');
-  t.equals(tree[0].toId, 3, 'midpoint at 3');
+  t.equal(tree[0].fromId, 1, 'it starts at 1');
+  t.equal(tree[0].toId, 3, 'midpoint at 3');
 
-  t.equals(tree[1].fromId, 3, 'second midpoint 3');
-  t.equals(tree[1].toId, 2, 'ends at 2');
+  t.equal(tree[1].fromId, 3, 'second midpoint 3');
+  t.equal(tree[1].toId, 2, 'ends at 2');
   t.end();
 });
 
@@ -37,10 +37,10 @@ test('it finds all trees in the forest', function (t) {
   var graph = fromDot('digraph G { 1 -> 2; 3 -> 4 }');
   var forest = kruskal(graph);
   t.ok(forest.length === 2, 'There are two elements in the forest');
-  t.equals(forest[0].fromId, 1, 'first starts at 1');
-  t.equals(forest[0].toId, 2, 'ends at 2');
+  t.equal(forest[0].fromId, 1, 'first starts at 1');
+  t.equal(forest[0].toId, 2, 'ends at 2');
 
-  t.equals(forest[1].fromId, 3, 'second starts at 3');
-  t.equals(forest[1].toId, 4, 'ends at 4');
+  t.equal(forest[1].fromId, 3, 'second starts at 3');
+  t.equal(forest[1].toId, 4, 'ends at 4');
   t.end();
 });
