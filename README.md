@@ -1,4 +1,4 @@
-# ngraph.kruskal [![Build Status](https://travis-ci.org/anvaka/ngraph.kruskal.svg)](https://travis-ci.org/anvaka/ngraph.kruskal)
+# ngraph.kruskal [![build status](https://github.com/anvaka/ngraph.kruskal/actions/workflows/tests.yaml/badge.svg)](https://github.com/anvaka/ngraph.kruskal/actions/workflows/tests.yaml)
 
 A minimum-spanning-tree algorithm for [ngraph.graph](https://github.com/anvaka/ngraph.graph).
 Runtime: `O(E log E)`, where `E` is number of edges in the graph.
