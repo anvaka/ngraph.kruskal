@@ -17,12 +17,12 @@
   "author": "Andrei Kashcha",
   "license": "MIT",
   "dependencies": {
-    "ngraph.disjoint-set": "^1.1.0"
+    "ngraph.disjoint-set": "^1.2.0"
   },
   "devDependencies": {
-    "ngraph.fromdot": "^6.0.1",
-    "ngraph.graph": "19.1.0",
-    "tap": "^15.0.9",
+    "ngraph.fromdot": "^7.0.0",
+    "ngraph.graph": "20.0.0",
+    "tap": "^15.1.6",
     "vivagraphjs": "^0.12.0"
   }
 }
